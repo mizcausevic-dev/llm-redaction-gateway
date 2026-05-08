@@ -1,0 +1,36 @@
+{
+  "name": "llm-redaction-gateway",
+  "version": "0.1.0",
+  "description": "PII and secret redaction gateway for LLM API calls. Pattern-based detection across 6 categories, reversible token-mapped redaction, policy-driven blocking, audit trail, and per-tenant routing.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --require ts-node/register --test tests/*.test.ts"
+  },
+  "engines": { "node": ">=20" },
+  "keywords": ["llm-security", "pii-redaction", "data-loss-prevention", "ai-governance", "ciso-tooling", "redaction-gateway", "platform-engineering"],
+  "author": "Mirza Causevic <miz@kineticgain.dev>",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.0.1",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.7.5",
+    "@types/supertest": "^6.0.2",
+    "@types/swagger-ui-express": "^4.1.6",
+    "supertest": "^7.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}

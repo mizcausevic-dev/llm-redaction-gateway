@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Redaction Gateway — DLP Console</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0C10; --panel: #1F2833; --text: #C5C6C7; --text-dim: #8a8d92;
+    --accent: #66FCF1; --accent-2: #45A29E;
+    --green: #2dd4a8; --yellow: #f4c542; --orange: #f4843a; --red: #ef4444;
+    --border: #2c3340;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; padding: 32px 24px; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header { margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 24px; }
+  .brand { display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+  .brand h1 { font-family: 'JetBrains Mono', monospace; font-size: 24px; color: var(--accent); font-weight: 700; }
+  .brand .sub { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; }
+  .timestamp { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+
+  .headline-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 32px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .kpi-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .kpi-value { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .kpi-value.warn { color: var(--orange); }
+  .kpi-value.crit { color: var(--red); }
+  .kpi-value.pass { color: var(--green); }
+  .kpi-meta { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+  section { margin-bottom: 32px; }
+  .section-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .section-header h2 { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; font-weight: 500; }
+  .section-header .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  th { text-align: left; padding: 12px 16px; background: rgba(102, 252, 241, 0.06); color: var(--accent); text-transform: uppercase; letter-spacing: 1px; font-size: 11px; font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  td.entity-name { color: var(--text); font-weight: 500; }
+  td.score { font-weight: 700; }
+  td.score.good { color: var(--green); }
+  td.score.warn { color: var(--yellow); }
+  td.score.bad { color: var(--orange); }
+  td.score.crit { color: var(--red); }
+  td.right { text-align: right; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace; }
+  .badge.allow { background: rgba(45, 212, 168, 0.15); color: var(--green); }
+  .badge.redact { background: rgba(244, 197, 66, 0.15); color: var(--yellow); }
+  .badge.block { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+  .badge.hardpin { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid var(--red); }
+  .badge.critical { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+  .badge.high { background: rgba(244, 132, 58, 0.15); color: var(--orange); }
+  .badge.medium { background: rgba(244, 197, 66, 0.15); color: var(--yellow); }
+  .badge.low { background: rgba(45, 212, 168, 0.15); color: var(--green); }
+  .badge.cred { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+  .badge.pii { background: rgba(244, 197, 66, 0.15); color: var(--yellow); }
+  .badge.pci { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+  .badge.code { background: rgba(244, 132, 58, 0.15); color: var(--orange); }
+  .badge.marker { background: rgba(102, 252, 241, 0.15); color: var(--accent); }
+  .badge.health { background: rgba(102, 252, 241, 0.15); color: var(--accent); }
+
+  .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .decision-bar { display: flex; height: 36px; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .decision-bar > div { display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: rgba(0,0,0,0.8); }
+  .decision-bar .allow { background: var(--green); }
+  .decision-bar .redact { background: var(--yellow); }
+  .decision-bar .block { background: var(--red); color: white; }
+
+  /* Sample diff */
+  .diff-box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; }
+  .diff-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .diff-content { color: var(--text); }
+  .diff-content .removed { color: var(--red); text-decoration: line-through; }
+  .diff-content .added { color: var(--green); background: rgba(45, 212, 168, 0.1); padding: 0 4px; border-radius: 3px; }
+
+  footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 12px; font-family: 'JetBrains Mono', monospace; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="brand">
+    <h1>// LLM REDACTION GATEWAY</h1>
+    <span class="sub">DLP Egress Console</span>
+  </div>
+  <div class="timestamp">As of 2026-05-07T17:48:33Z · Window: 24h · Catalog: 25 patterns · Tenants: 4</div>
+</header>
+
+<!-- KPIs -->
+<div class="headline-grid">
+  <div class="kpi"><div class="kpi-label">Decisions / 24h</div><div class="kpi-value">12,840</div><div class="kpi-meta">across 4 tenants</div></div>
+  <div class="kpi"><div class="kpi-label">Allow Rate</div><div class="kpi-value pass">62.4%</div><div class="kpi-meta">clean traffic</div></div>
+  <div class="kpi"><div class="kpi-label">Redact Rate</div><div class="kpi-value warn">31.2%</div><div class="kpi-meta">tokenized passthrough</div></div>
+  <div class="kpi"><div class="kpi-label">Block Rate</div><div class="kpi-value crit">6.4%</div><div class="kpi-meta">820 blocks</div></div>
+  <div class="kpi"><div class="kpi-label">Hard-Blocks</div><div class="kpi-value crit">340</div><div class="kpi-meta">2.6% of all calls</div></div>
+  <div class="kpi"><div class="kpi-label">Critical Hits</div><div class="kpi-value crit">512</div><div class="kpi-meta">PCI · creds · keys</div></div>
+</div>
+
+<!-- Decision distribution + Sample redaction -->
+<div class="grid-two">
+  <div>
+    <div class="section-header">
+      <h2>// DECISION DISTRIBUTION (24H)</h2>
+      <div class="meta">12,840 prompts processed</div>
+    </div>
+    <div class="panel" style="padding: 16px 20px;">
+      <div class="decision-bar">
+        <div class="allow" style="width: 62.4%;">allow 62.4%</div>
+        <div class="redact" style="width: 31.2%;">redact 31.2%</div>
+        <div class="block" style="width: 6.4%;">block 6.4%</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+        <div><div style="color: var(--green); font-weight: 700;">allow</div><div style="color: var(--text-dim);">8,012 prompts</div></div>
+        <div><div style="color: var(--yellow); font-weight: 700;">redact</div><div style="color: var(--text-dim);">4,008 prompts</div></div>
+        <div><div style="color: var(--red); font-weight: 700;">block</div><div style="color: var(--text-dim);">820 prompts</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-header">
+      <h2>// SAMPLE REDACTION</h2>
+      <div class="meta">tokenized passthrough</div>
+    </div>
+    <div class="diff-box">
+      <div class="diff-label">ORIGINAL PROMPT</div>
+      <div class="diff-content"><span class="removed">Email alice@corp.com about case file. SSN: 123-45-6789</span></div>
+      <div class="diff-label" style="margin-top: 12px;">SENT TO LLM</div>
+      <div class="diff-content"><span class="added">Email [EMAIL_1] about case file. SSN: [SSN_1]</span></div>
+      <div class="diff-label" style="margin-top: 12px;">DECISION</div>
+      <div class="diff-content"><span class="badge redact">redact</span> &nbsp; 2 hits · pii · severity high</div>
+    </div>
+  </div>
+</div>
+
+<!-- Top hit categories + severity -->
+<section>
+  <div class="section-header">
+    <h2>// HIT CATEGORIES (24H)</h2>
+    <div class="meta">5,140 total hits across 6 categories</div>
+  </div>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Category</th><th>Description</th><th class="right">Hits</th><th class="right">Share</th><th>Common patterns</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge pii">pii</span></td><td class="entity-name">Personal identifiers</td><td class="right score warn">3,820</td><td class="right">74.3%</td><td>email, phone, SSN, IBAN, DOB</td><td><span class="badge redact">redact</span></td></tr>
+        <tr><td><span class="badge cred">credential</span></td><td class="entity-name">API keys, tokens, passwords</td><td class="right score crit">512</td><td class="right">9.9%</td><td>github-pat, openai-key, AWS-keys</td><td><span class="badge hardpin">hard-block</span></td></tr>
+        <tr><td><span class="badge marker">marker</span></td><td class="entity-name">Internal classification</td><td class="right score">340</td><td class="right">6.6%</td><td>CONFIDENTIAL, SECRET, codenames</td><td><span class="badge block">block</span></td></tr>
+        <tr><td><span class="badge code">source-code</span></td><td class="entity-name">Code-embedded secrets</td><td class="right score">280</td><td class="right">5.4%</td><td>connection-string, AWS-SDK creds</td><td><span class="badge redact">redact</span></td></tr>
+        <tr><td><span class="badge pci">pci</span></td><td class="entity-name">Payment card data</td><td class="right score crit">142</td><td class="right">2.8%</td><td>credit-card, CVV</td><td><span class="badge hardpin">hard-block</span></td></tr>
+        <tr><td><span class="badge health">health</span></td><td class="entity-name">Health information</td><td class="right">46</td><td class="right">0.9%</td><td>MRN</td><td><span class="badge block">block</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Top blocking users + Pattern catalog stats -->
+<div class="grid-two">
+  <div>
+    <div class="section-header">
+      <h2>// TOP USERS BY BLOCK COUNT</h2>
+      <div class="meta">repeat offenders / risk hotspots</div>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>User</th><th>Tenant</th><th class="right">Total</th><th class="right">Blocks</th><th>Block Rate</th></tr></thead>
+        <tbody>
+          <tr><td class="entity-name">eve@corp.com</td><td>tenant_default</td><td class="right">42</td><td class="right score crit">8</td><td><span class="badge block">19%</span></td></tr>
+          <tr><td class="entity-name">frank@corp.com</td><td>tenant_engineering</td><td class="right">68</td><td class="right score crit">6</td><td><span class="badge block">8.8%</span></td></tr>
+          <tr><td class="entity-name">grace@corp.com</td><td>tenant_default</td><td class="right">31</td><td class="right score bad">4</td><td><span class="badge redact">12.9%</span></td></tr>
+          <tr><td class="entity-name">iris@corp.com</td><td>tenant_engineering</td><td class="right">54</td><td class="right score bad">3</td><td><span class="badge redact">5.6%</span></td></tr>
+          <tr><td class="entity-name">paul@corp.com</td><td>tenant_engineering</td><td class="right">22</td><td class="right score bad">2</td><td><span class="badge redact">9.1%</span></td></tr>
+          <tr><td class="entity-name">henry@corp.com</td><td>tenant_engineering</td><td class="right">38</td><td class="right score warn">2</td><td><span class="badge redact">5.3%</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-header">
+      <h2>// PATTERN HEATMAP</h2>
+      <div class="meta">most-triggered patterns</div>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>Pattern</th><th>Severity</th><th class="right">Hits</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td class="entity-name">email</td><td><span class="badge low">low</span></td><td class="right">2,140</td><td><span class="badge redact">redact</span></td></tr>
+          <tr><td class="entity-name">us-phone</td><td><span class="badge low">low</span></td><td class="right">820</td><td><span class="badge redact">redact</span></td></tr>
+          <tr><td class="entity-name">ssn-us</td><td><span class="badge high">high</span></td><td class="right">312</td><td><span class="badge redact">redact</span></td></tr>
+          <tr><td class="entity-name">classified-marker</td><td><span class="badge critical">critical</span></td><td class="right">340</td><td><span class="badge block">block</span></td></tr>
+          <tr><td class="entity-name">github-pat</td><td><span class="badge critical">critical</span></td><td class="right">182</td><td><span class="badge hardpin">hard-block</span></td></tr>
+          <tr><td class="entity-name">credit-card</td><td><span class="badge critical">critical</span></td><td class="right">142</td><td><span class="badge hardpin">hard-block</span></td></tr>
+          <tr><td class="entity-name">aws-access-key</td><td><span class="badge critical">critical</span></td><td class="right">98</td><td><span class="badge hardpin">hard-block</span></td></tr>
+          <tr><td class="entity-name">connection-string</td><td><span class="badge high">high</span></td><td class="right">170</td><td><span class="badge redact">redact</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Per-tenant policy stats -->
+<section>
+  <div class="section-header">
+    <h2>// PER-TENANT BREAKDOWN</h2>
+    <div class="meta">policy + decision distribution</div>
+  </div>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Tenant</th><th>Policy</th><th class="right">Calls</th><th class="right">Allow</th><th class="right">Redact</th><th class="right">Block</th><th>Profile</th></tr></thead>
+      <tbody>
+        <tr><td class="entity-name">tenant_engineering</td><td>strict creds, JWT block override</td><td class="right">5,140</td><td class="right score good">62%</td><td class="right score warn">28%</td><td class="right score crit">10%</td><td>Heavy redaction; high block rate from creds</td></tr>
+        <tr><td class="entity-name">tenant_default</td><td>catalog defaults</td><td class="right">3,920</td><td class="right score good">68%</td><td class="right score warn">26%</td><td class="right score">6%</td><td>Standard policy</td></tr>
+        <tr><td class="entity-name">tenant_support</td><td>email/phone redact</td><td class="right">2,180</td><td class="right score good">38%</td><td class="right score warn">61%</td><td class="right">1%</td><td>High redaction (PII heavy traffic)</td></tr>
+        <tr><td class="entity-name">tenant_legal</td><td>email/phone allow override</td><td class="right">1,600</td><td class="right score good">82%</td><td class="right score warn">17%</td><td class="right">1%</td><td>Lower redaction; case-work passthrough</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  llm-redaction-gateway · part of the AI Platform Engineering portfolio · <a href="https://github.com/mizcausevic-dev" style="color: var(--accent);">github.com/mizcausevic-dev</a>
+</footer>
+
+</div>
+</body>
+</html>
