@@ -1,19 +1,20 @@
-﻿# Why We Built This
+# Why We Built This
 
-**llm-redaction-gateway** started from a recurring operating problem in identity governance. Teams were collecting more data and more system state, but the decision layer around that data was still fragile under pressure. Teams could collect raw signals, but still struggle to answer the harder questions under pressure: what is actually drifting, who owns the next move, and how much business or control risk is building underneath the technical state.
+**llm-redaction-gateway** came from a familiar enterprise pattern: important systems were technically functional but operationally under-explained. People could often find the inputs, but still struggle to form a clear next move.
 
-In this case the pressure showed up around identity sprawl, tenant-boundary risk, and access-review friction. That sounds specific, but the underlying failure mode was familiar. A team would have multiple tools in place, each doing a piece of the job. There might be observability, validation, ticketing, dashboards, static analysis, workflow software, or spreadsheet-based reporting. None of that meant the operating problem was actually solved. What was usually missing was a clear translation layer between system behavior and accountable action.
+The recurring pressure in this space showed up around identity sprawl, tenant-boundary mistakes, and access-review workflows that are technically complete but poorly explained. In practice, that meant teams could collect logs, metrics, workflow state, documents, or events and still not have a good answer to the hardest questions: what is drifting, what matters first, who owns the next move, and what evidence supports that move? Once a system reaches that point, the problem is no longer only technical. It becomes operational.
 
-That was the opening for **llm-redaction-gateway**. The repo was designed around a simple idea: operators need more than visibility. They need evidence, priorities, and next actions that make sense under pressure. That is why the project is framed as identity governance rather than as a generic app demo. The point is not just to show that data can be rendered or APIs can be wired together. The point is to show what a practical control surface looks like when the audience is IAM, platform security, and compliance teams.
+That is why **llm-redaction-gateway** was built the way it was. The repo is a deliberate attempt to model a real operating layer for IAM, platform security, compliance, and internal platform teams. It is not just trying to present data attractively or prove that a stack can be wired together. It is trying to show what happens when evidence, prioritization, and next-best action are treated as first-class product concerns.
 
-Existing tools missed the mark for understandable reasons. The available tooling landscape - IGA suites, ticket-based approvals, and access review campaigns - helped with record-keeping, scanning, reporting, or workflow coverage. What it still missed was fast, explainable control decisions at the moment operators actually needed to act. In other words, the gap was not capability in isolation. The gap was operational coherence. The team responsible for day-to-day decisions still had to reconstruct the story manually.
+Existing tools helped with adjacent workflows. IGA suites, ticket approvals, and access review campaigns covered storage, reporting, scanning, or execution in pieces. What they still missed was a fast, legible control layer for access reasoning at the moment decisions are made. That left operators reconstructing the story manually at exactly the moment they needed clarity.
 
-That shaped the design philosophy from the start:
+That shaped the design philosophy:
 
-- **operator-first** so the most important signal is the one that gets surfaced first
-- **decision-legible** so a security lead, platform operator, product owner, or business stakeholder can understand why a recommendation exists
-- **CI-native** so the checks and narratives can live close to where systems are built, changed, and reviewed
+- **operator-first** so the riskiest or most time-sensitive signal is surfaced early
+- **decision-legible** so the logic behind a recommendation can be understood by humans under pressure
+- **review-friendly** so the repo supports discussion, governance, and iteration instead of hiding the reasoning
+- **CI-native** so checks and narratives can live close to the build and change process
 
-That philosophy also explains what this repo does not try to be. It is not a vague "AI platform," not a one-off research prototype, and not a thin wrapper around a fashionable stack. It is a targeted attempt to model a real operating layer around this problem: PII and secret redaction gateway for LLM API calls. 25+ detection patterns across 6 categories, reversible token-mapped redaction, layered tenant policy with hardpinned safety rails, full audit trail.
+This repo also avoids trying to be a vague platform for everything. Its value comes from being opinionated about a real problem: PII and secret redaction gateway for LLM API calls. 25+ detection patterns across 6 categories, reversible token-mapped redaction, layered tenant policy with hardpinned safety rails, full audit trail.
 
-What comes next is practical. The roadmap is about pushing the project deeper into real operational utility: deeper entitlement evidence, better review UX, and stronger integration with platform control planes. That direction matters because the long-term value of **llm-redaction-gateway** is not the individual screen or endpoint. It is the operating discipline behind it. The point of the repo is to make that operating layer visible enough to review, improve, and trust.
+What comes next is practical. The roadmap is about richer entitlement evidence, clearer review context, and stronger ties into adjacent platform controls. That is the discipline this repo is trying to model in a practical, reviewable way.
