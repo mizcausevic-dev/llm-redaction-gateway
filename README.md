@@ -12,10 +12,6 @@
 
 PII and secret redaction gateway for LLM API calls. 25+ detection patterns across 6 categories, reversible token-mapped redaction, layered tenant policy with hardpinned safety rails, full audit trail.
 
-> Recruiter takeaway:
->
-> *"This person built the prevention half of the AI-data-leak problem. Pattern catalog with 25+ detectors, reversible token mapping so the LLM sees `[SSN_1]` and the response can be un-tokenized back, layered tenant policies with hardpins for credit cards and AWS keys. CISO buyer signal applied as production code."*
-
 ## Why This Exists
 
 Sister project to [`shadow-ai-detector`](https://github.com/mizcausevic-dev/shadow-ai-detector). The detector finds leaks after they happen. **This gateway prevents them at the egress point.**
