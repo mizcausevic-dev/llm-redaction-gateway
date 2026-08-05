@@ -1,5 +1,10 @@
 # LLM Redaction Gateway
 
+[![Live demo: PII Redaction Gateway](docs/demo-preview.png)](https://redact.kineticgain.com)
+
+**Live demo:** [https://redact.kineticgain.com](https://redact.kineticgain.com) . Client-side, zero data egress.
+
+
 [![CI](https://github.com/mizcausevic-dev/llm-redaction-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/mizcausevic-dev/llm-redaction-gateway/actions/workflows/ci.yml)
 [![Node](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
