@@ -11,9 +11,8 @@ export const UnredactSchema = z.object({
 });
 
 export const GatewayProcessSchema = z.object({
-  prompt: z.string(),
+  prompt: z.string().min(1).max(100_000),
   tenantId: z.string().optional(),
-  excludePatternNames: z.array(z.string()).optional(),
 });
 
 const PolicyOverrideSchema = z.object({

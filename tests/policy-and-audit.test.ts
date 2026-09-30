@@ -49,10 +49,16 @@ test('evaluatePolicy: tenant override allows email passthrough', () => {
   assert.equal(p.decision, 'allow');
   assert.equal(p.allowedCount, 1);
   assert.ok(p.appliedOverrides.length >= 1);
+  const decision = processGatewayRequest(r, policy);
+  assert.equal(decision.decision, 'allow');
+  assert.equal(decision.redactedPrompt, r.original);
+  assert.equal(decision.hits[0].matchedSnippet.includes('user@corp.com'), false);
 });
 
 test('evaluatePolicy: tenant override can escalate redact → block', () => {
-  const r = redactText('JWT: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature123');
+  const syntheticJwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiJ0ZXN0In0', 'signature123'].join('.');
+  const r = redactText(`JWT: ${syntheticJwt}`);
+  assert.equal(r.hits[0].patternName, 'jwt-token');
   const policy: TenantPolicy = {
     tenantId: 'strict',
     overrides: [{ patternName: 'jwt-token', decision: 'block' }],

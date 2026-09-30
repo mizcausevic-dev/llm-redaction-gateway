@@ -54,7 +54,8 @@ gatewayRouter.post('/process', (req, res) => {
   const parsed = GatewayProcessSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid payload', details: parsed.error.issues }); return; }
   const tenant = parsed.data.tenantId ? findTenantPolicy(parsed.data.tenantId) ?? null : null;
-  const detection = redactText(parsed.data.prompt, { excludePatternNames: parsed.data.excludePatternNames });
+  // Caller-controlled exclusions must never bypass the decision endpoint's hard blocks.
+  const detection = redactText(parsed.data.prompt);
   const decision = processGatewayRequest(detection, tenant);
   res.json(decision);
 });

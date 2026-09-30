@@ -1,8 +1,8 @@
 # LLM Redaction Gateway
 
-[![Live demo: PII Redaction Gateway](docs/demo-preview.png)](https://redact.kineticgain.com)
+[![Illustrative demo preview with synthetic data](docs/demo-preview.png)](https://redact.kineticgain.com)
 
-**Live demo:** [https://redact.kineticgain.com](https://redact.kineticgain.com) . Client-side, zero data egress.
+**Static demo:** [https://redact.kineticgain.com](https://redact.kineticgain.com). The preview images use synthetic figures; they do not show observed traffic.
 
 
 [![CI](https://github.com/mizcausevic-dev/llm-redaction-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/mizcausevic-dev/llm-redaction-gateway/actions/workflows/ci.yml)
@@ -10,19 +10,19 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-66FCF1)](LICENSE)
 
-PII and secret redaction gateway for LLM API calls. 25+ detection patterns across 6 categories, reversible token-mapped redaction, layered tenant policy with hardpinned safety rails, full audit trail.
+Local PII and secret redaction **decision prototype**. It evaluates prompts against patterns and sample policy, then returns an allow, redact, or block decision. It does not forward requests to an LLM provider, authenticate tenants, or write a live audit trail. Do not deploy this API or send real sensitive data to it.
 
 ## Why This Exists
 
-Sister project to [`shadow-ai-detector`](https://github.com/mizcausevic-dev/shadow-ai-detector). The detector finds leaks after they happen. **This gateway prevents them at the egress point.**
+Sister project to [`shadow-ai-detector`](https://github.com/mizcausevic-dev/shadow-ai-detector). This prototype explores the policy decision that would be needed at an egress point.
 
-The pattern is simple: applications call this gateway instead of calling Anthropic / OpenAI / Google directly. The gateway scans the prompt against the catalog, applies the active tenant policy, and either:
+The local API scans a sample prompt against the catalog, applies sample policy, and returns a decision that a future authenticated proxy could enforce:
 
 - **Allows** the prompt through unchanged (no sensitive content)
 - **Redacts** the prompt with stable token placeholders (`[SSN_1]`, `[EMAIL_2]`) and a reversal map for un-tokenizing the response
 - **Blocks** the call entirely (hard-block patterns or policy violations)
 
-Hardpinned patterns — credit cards, private keys, AWS access keys, GitHub PATs, OpenAI/Anthropic keys — **always block, regardless of tenant policy.** No override allowed.
+On `/api/gateway/process`, detected hardpinned patterns such as credit cards, private keys, and API keys return a block decision regardless of the sample tenant policy. Pattern matching is heuristic and cannot guarantee complete detection.
 
 ## Where This Sits in the Portfolio
 
@@ -35,11 +35,11 @@ Hardpinned patterns — credit cards, private keys, AWS access keys, GitHub PATs
 | [`agent-router`](https://github.com/mizcausevic-dev/agent-router) | Runtime routing | Which model does this request hit? |
 | [`agentobserve`](https://github.com/mizcausevic-dev/agentobserve) | Runtime | What did agents actually do? |
 | [`shadow-ai-detector`](https://github.com/mizcausevic-dev/shadow-ai-detector) | Egress (detect) | Who is leaking what to whom? |
-| **`llm-redaction-gateway`** | **Egress (prevent)** | ***How do we stop the leak before it happens?*** |
+| **`llm-redaction-gateway`** | **Pre-egress decision prototype** | ***What decision should an enforcing proxy make?*** |
 | [`ai-finops-radar`](https://github.com/mizcausevic-dev/ai-finops-radar) | Finance | Are we on budget? |
 | [`kinetic-flightdeck`](https://github.com/mizcausevic-dev/kinetic-flightdeck) | Operator | Are we OK right now? |
 
-The egress surface now has both halves: **detect** + **prevent**. Together they're the AI-DLP layer most enterprises lack.
+These adjacent prototypes model detection and decision logic. A production DLP boundary still requires an authenticated enforcing proxy and independent validation.
 
 ## Five Capabilities
 
@@ -78,7 +78,7 @@ Hardpins protect the gateway from policy-misconfiguration attacks. A rogue tenan
 
 ### 5. Audit Trail
 
-Every decision (allow / redact / block) gets an audit entry: caller, target provider/model, hit categories, severity, hard-block triggered, prompt size. The rollup summary surfaces top users by block count, top providers, decision distribution, severity histogram, and hard-block rate — the CISO board-meeting view.
+The audit endpoints summarize a bundled **synthetic fixture**. Runtime decisions are not recorded. A production audit trail would need authenticated caller identity, durable writes, retention rules, deletion controls, and evidence integrity.
 
 ## API Endpoints
 
@@ -140,7 +140,7 @@ POST /api/gateway/process
     "hitCount": 3,
     "hardBlockTriggered": true,
     "blockingReasons": ["credit-card (critical) — hard-block pattern."],
-    "recommendedAction": "Reject upstream call; quarantine prompt; alert security team. Hard-block triggered."
+    "recommendedAction": "Block decision: caller must not forward this prompt. No quarantine or alert is performed by this prototype."
   },
   "highestSeverity": "critical",
   "byCategory": { "credential": 0, "pii": 2, "pci": 1, "health": 0, "internal-marker": 0, "source-code": 0 }
@@ -149,9 +149,11 @@ POST /api/gateway/process
 
 The credit-card hard-block triggered. Token map is empty (since the prompt is blocked, returning the map would leak the very secret we suppressed).
 
-## Operator Console Preview
+## API Snapshot
 
-![LLM Redaction Gateway dashboard — pattern catalog, decisions, audit, top users](docs/hero.png)
+![Local browser capture of the API dashboard summary JSON response](docs/api-dashboard-summary.png)
+
+This browser capture is from the locally running `/api/dashboard/summary` endpoint. The response is generated from bundled synthetic fixtures. It is not evidence of live traffic, an operator console, or production monitoring. The `dashboard-preview/` page remains a separate, clearly labeled visual concept.
 
 ## Getting Started
 
@@ -165,7 +167,7 @@ The credit-card hard-block triggered. Token map is empty (since the prompt is bl
 ```bash
 git clone https://github.com/mizcausevic-dev/llm-redaction-gateway.git
 cd llm-redaction-gateway
-npm install
+npm ci
 npm run dev
 ```
 
@@ -181,7 +183,7 @@ Visit:
 npm test
 ```
 
-27 unit tests across redaction engine (14: pattern detection, token mapping, snippet redaction, indices, unredact round-trip), policy engine (8: defaults, hardpins, tenant overrides, decision logic), and audit summary (5: aggregation, top-users sort, decision counts).
+The suite covers redaction, policy decisions, synthetic audit summaries, and regression checks for blocked-secret response leakage and caller-controlled detector exclusion.
 
 ## What This Demonstrates
 
@@ -190,7 +192,7 @@ npm test
 - Overlap resolution by severity (the boring detail that matters)
 - Hardpins designed to survive misconfigured tenant policies
 - Token-map suppression on block decisions (you don't return the secrets you blocked)
-- Strict-mode TypeScript with full test coverage; CI matrix on Node 20 + 22
+- Strict-mode TypeScript with focused tests; CI matrix on Node 20 + 22
 
 ## Future Enhancements
 

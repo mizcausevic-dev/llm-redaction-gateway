@@ -101,17 +101,17 @@ export function evaluatePolicy(
   if (blockTriggered) {
     decision = 'block';
     recommendedAction = hardBlockTriggered
-      ? 'Reject upstream call; quarantine prompt; alert security team. Hard-block triggered.'
-      : 'Reject upstream call; notify caller of policy violation.';
+      ? 'Block decision: caller must not forward this prompt. No quarantine or alert is performed by this prototype.'
+      : 'Block decision: caller must not forward this prompt.';
   } else if (redactedCount === 0) {
     // No hits, OR all hits were override-allowed/warned → pass through
     decision = 'allow';
     recommendedAction = result.hits.length === 0
-      ? 'Pass-through; no sensitive content detected.'
-      : 'Pass-through; all detected items overridden to allow/warn.';
+      ? 'Allow decision: no catalog match detected. Detection is not exhaustive.'
+      : 'Allow decision: detected items are allowed or warned by sample policy.';
   } else {
     decision = 'redact';
-    recommendedAction = `Forward redacted prompt to LLM (${redactedCount} redaction(s) applied).`;
+    recommendedAction = `Redact decision: a caller could use the returned prompt after review (${redactedCount} redaction(s) applied).`;
   }
 
   return {
@@ -131,7 +131,7 @@ export function evaluatePolicy(
 export interface GatewayDecision {
   decision: PolicyDecision;
   redactedPrompt: string;
-  hits: RedactionResult['hits'];
+  hits: Array<Omit<RedactionResult['hits'][number], 'matchedValue'>>;
   tokenMap: Record<string, string>;
   policy: PolicyEvaluation;
   highestSeverity: RedactionResult['highestSeverity'];
@@ -145,9 +145,13 @@ export function processGatewayRequest(
   const policy = evaluatePolicy(result, tenantPolicy);
   return {
     decision: policy.decision,
-    // If blocked, don't forward anything — caller should handle
-    redactedPrompt: policy.decision === 'block' ? '' : result.redacted,
-    hits: result.hits,
+    // If blocked, return no prompt. This prototype never forwards requests.
+    redactedPrompt: policy.decision === 'block'
+      ? ''
+      : policy.decision === 'allow' ? result.original : result.redacted,
+    // Never return the full matched value in decision metadata, including
+    // block responses. Callers receive only a masked snippet.
+    hits: result.hits.map(({ matchedValue: _matchedValue, ...safeHit }) => safeHit),
     // If blocked, don't expose the token map either (it could contain
     // the very secrets we're trying to suppress)
     tokenMap: policy.decision === 'block' ? {} : result.tokenMap,

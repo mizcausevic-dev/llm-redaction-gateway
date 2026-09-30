@@ -1,20 +1,7 @@
-# Why We Built This
+# Why This Exists
 
-**llm-redaction-gateway** came from a familiar enterprise pattern: important systems were technically functional but operationally under-explained. People could often find the inputs, but still struggle to form a clear next move.
+This repository explores a decision that applications need before sending prompts to an LLM provider: allow the text, replace detected sensitive spans, or block it. The TypeScript library contains pattern detectors, sample policy overrides, hard-block rules, and reversible token mapping.
 
-The recurring pressure in this space showed up around identity sprawl, tenant-boundary mistakes, and access-review workflows that are technically complete but poorly explained. In practice, that meant teams could collect logs, metrics, workflow state, documents, or events and still not have a good answer to the hardest questions: what is drifting, what matters first, who owns the next move, and what evidence supports that move? Once a system reaches that point, the problem is no longer only technical. It becomes operational.
+The HTTP service is a **local prototype**. It returns decisions but does not forward requests, authenticate callers or tenants, or persist audit records. Its audit endpoints read a bundled synthetic fixture. The separate browser demo and console image are illustrations, not evidence of production traffic.
 
-That is why **llm-redaction-gateway** was built the way it was. The repo is a deliberate attempt to model a real operating layer for IAM, platform security, compliance, and internal platform teams. It is not just trying to present data attractively or prove that a stack can be wired together. It is trying to show what happens when evidence, prioritization, and next-best action are treated as first-class product concerns.
-
-Existing tools helped with adjacent workflows. IGA suites, ticket approvals, and access review campaigns covered storage, reporting, scanning, or execution in pieces. What they still missed was a fast, legible control layer for access reasoning at the moment decisions are made. That left operators reconstructing the story manually at exactly the moment they needed clarity.
-
-That shaped the design philosophy:
-
-- **operator-first** so the riskiest or most time-sensitive signal is surfaced early
-- **decision-legible** so the logic behind a recommendation can be understood by humans under pressure
-- **review-friendly** so the repo supports discussion, governance, and iteration instead of hiding the reasoning
-- **CI-native** so checks and narratives can live close to the build and change process
-
-This repo also avoids trying to be a vague platform for everything. Its value comes from being opinionated about a real problem: PII and secret redaction gateway for LLM API calls. 25+ detection patterns across 6 categories, reversible token-mapped redaction, layered tenant policy with hardpinned safety rails, full audit trail.
-
-What comes next is practical. The roadmap is about richer entitlement evidence, clearer review context, and stronger ties into adjacent platform controls. That is the discipline this repo is trying to model in a practical, reviewable way.
+The next engineering step would be an authenticated, tenant-bound enforcing proxy with provider adapters, response handling, durable redacted audit evidence, abuse controls, and independent false-negative evaluation. Until those exist, use this repository for design review and synthetic tests only.
