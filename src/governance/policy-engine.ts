@@ -1,10 +1,10 @@
 // Policy engine. Given a redaction result, evaluate against the active
 // policy bundle and decide: allow / redact / block. Policy is layered:
 // 1. Per-pattern default policy (from the catalog)
-// 2. Per-tenant overrides (e.g., legal team allowed PII passthrough)
+// 2. Per-tenant overrides (sample policy classifications only)
 // 3. Global hardpins (credit cards always blocked, no override)
 
-import type { RedactionResult } from './redaction-engine';
+import { toPublicRedactionResult, type PublicDetectionHit, type RedactionResult } from './redaction-engine';
 import type { Category, DefaultPolicy } from './pattern-catalog';
 import { patternByName } from './pattern-catalog';
 
@@ -46,6 +46,23 @@ export interface PolicyEvaluation {
   appliedOverrides: string[];
   hardBlockTriggered: boolean;
   recommendedAction: string;
+}
+
+export type PublicPolicyEvaluation = Omit<PolicyEvaluation, 'tenantId'>;
+
+// Tenant IDs on the custom policy endpoint are caller-controlled and must not
+// become a second path for reflecting detected prompt values.
+export function toPublicPolicyEvaluation(policy: PolicyEvaluation): PublicPolicyEvaluation {
+  return {
+    decision: policy.decision,
+    hitCount: policy.hitCount,
+    blockingReasons: policy.blockingReasons,
+    redactedCount: policy.redactedCount,
+    allowedCount: policy.allowedCount,
+    appliedOverrides: policy.appliedOverrides,
+    hardBlockTriggered: policy.hardBlockTriggered,
+    recommendedAction: policy.recommendedAction,
+  };
 }
 
 export function evaluatePolicy(
@@ -90,7 +107,7 @@ export function evaluatePolicy(
     } else if (effective === 'redact') {
       redactedCount++;
     } else {
-      // 'allow' or 'warn' — both pass through
+      // 'allow' or 'warn' in the sample policy; public output still tokenizes.
       allowedCount++;
     }
   }
@@ -104,11 +121,11 @@ export function evaluatePolicy(
       ? 'Block decision: caller must not forward this prompt. No quarantine or alert is performed by this prototype.'
       : 'Block decision: caller must not forward this prompt.';
   } else if (redactedCount === 0) {
-    // No hits, OR all hits were override-allowed/warned → pass through
+    // No hits, OR all hits were override-allowed/warned in sample policy.
     decision = 'allow';
     recommendedAction = result.hits.length === 0
       ? 'Allow decision: no catalog match detected. Detection is not exhaustive.'
-      : 'Allow decision: detected items are allowed or warned by sample policy.';
+      : 'Allow decision: detected items are allowed or warned by sample policy. The returned prompt still tokenizes catalog matches.';
   } else {
     decision = 'redact';
     recommendedAction = `Redact decision: a caller could use the returned prompt after review (${redactedCount} redaction(s) applied).`;
@@ -131,9 +148,8 @@ export function evaluatePolicy(
 export interface GatewayDecision {
   decision: PolicyDecision;
   redactedPrompt: string;
-  hits: Array<Omit<RedactionResult['hits'][number], 'matchedValue'>>;
-  tokenMap: Record<string, string>;
-  policy: PolicyEvaluation;
+  hits: PublicDetectionHit[];
+  policy: PublicPolicyEvaluation;
   highestSeverity: RedactionResult['highestSeverity'];
   byCategory: RedactionResult['byCategory'];
 }
@@ -143,19 +159,16 @@ export function processGatewayRequest(
   tenantPolicy: TenantPolicy | null = null
 ): GatewayDecision {
   const policy = evaluatePolicy(result, tenantPolicy);
+  const publicDetection = toPublicRedactionResult(result);
   return {
     decision: policy.decision,
-    // If blocked, return no prompt. This prototype never forwards requests.
+    // An allow policy is advisory. Never put a detected value into the
+    // returned prompt, even when a sample tenant policy allows that pattern.
     redactedPrompt: policy.decision === 'block'
       ? ''
-      : policy.decision === 'allow' ? result.original : result.redacted,
-    // Never return the full matched value in decision metadata, including
-    // block responses. Callers receive only a masked snippet.
-    hits: result.hits.map(({ matchedValue: _matchedValue, ...safeHit }) => safeHit),
-    // If blocked, don't expose the token map either (it could contain
-    // the very secrets we're trying to suppress)
-    tokenMap: policy.decision === 'block' ? {} : result.tokenMap,
-    policy,
+      : publicDetection.redacted,
+    hits: publicDetection.hits,
+    policy: toPublicPolicyEvaluation(policy),
     highestSeverity: result.highestSeverity,
     byCategory: result.byCategory,
   };

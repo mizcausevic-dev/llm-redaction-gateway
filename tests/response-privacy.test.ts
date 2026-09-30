@@ -1,0 +1,92 @@
+import { after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import morgan from 'morgan';
+import request from 'supertest';
+import { ACCESS_LOG_FORMAT } from '../src/config/access-log';
+import { app } from '../src/index';
+
+const email = 'privacy-probe@example.com';
+const server = app.listen(0, '127.0.0.1');
+after(async () => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
+});
+
+function assertNoMatchedValueInResponse(body: unknown): void {
+  const json = JSON.stringify(body);
+  assert.equal(json.includes(email), false, 'recognized input leaked into response');
+  assert.equal(json.includes('"original"'), false, 'original prompt leaked into response');
+  assert.equal(json.includes('"matchedValue"'), false, 'raw hit leaked into response');
+  assert.equal(json.includes('"matchedSnippet"'), false, 'partial match leaked into response');
+  assert.equal(json.includes('"tokenMap"'), false, 'reversal map leaked into response');
+}
+
+test('all redaction and policy response paths keep matched values server-side', async () => {
+  const requests = [
+    () => request(server).post('/api/redact').send({ text: `Email ${email}` }),
+    () => request(server).post('/api/gateway/process').send({ prompt: `Email ${email}` }),
+    () => request(server).post('/api/gateway/process').send({ prompt: `Email ${email}`, tenantId: 'tenant_legal' }),
+    () => request(server).post('/api/gateway/evaluate-policy').send({ text: `Email ${email}` }),
+    () => request(server).post('/api/gateway/evaluate-policy').send({
+      text: `Email ${email}`,
+      tenantPolicy: {
+        tenantId: email,
+        overrides: [{ patternName: 'email', decision: 'allow' }],
+        allowedRedactedCategories: ['pii'],
+      },
+    }),
+  ];
+
+  for (const pending of requests) {
+    const response = await pending();
+    assert.equal(response.status, 200);
+    assertNoMatchedValueInResponse(response.body);
+  }
+});
+
+test('invalid policy input does not reflect caller values in validation errors', async () => {
+  const response = await request(server).post('/api/gateway/evaluate-policy').send({
+    text: `Email ${email}`,
+    tenantPolicy: {
+      tenantId: 'test-policy',
+      overrides: [{ patternName: 'email', decision: email }],
+      allowedRedactedCategories: ['pii'],
+    },
+  });
+  assert.equal(response.status, 400);
+  assertNoMatchedValueInResponse(response.body);
+});
+
+test('raw redaction endpoint ignores caller-requested detector exclusion', async () => {
+  const response = await request(server).post('/api/redact').send({
+    text: `Email ${email}`,
+    excludePatternNames: ['email'],
+  });
+  assert.equal(response.status, 200);
+  assert.match(response.body.redacted, /\[EMAIL_1\]/);
+  assertNoMatchedValueInResponse(response.body);
+});
+
+test('public unredact endpoint cannot return original values', async () => {
+  const response = await request(server).post('/api/redact/unredact').send({
+    text: 'Email [EMAIL_1]',
+    tokenMap: { '[EMAIL_1]': email },
+  });
+  assert.equal(response.status, 404);
+  assertNoMatchedValueInResponse(response.body);
+});
+
+test('access logs omit query strings carrying caller values', () => {
+  const encodedUrl = `/health?probe=${encodeURIComponent(email)}`;
+  const output = morgan.compile(ACCESS_LOG_FORMAT)({
+    method: () => 'GET',
+    status: () => '200',
+    'response-time': () => '1.2',
+    url: () => encodedUrl,
+  }, {} as never, {} as never);
+  assert.ok(output);
+  assert.match(output, /GET.*200/);
+  assert.equal(output.includes(email), false);
+  assert.equal(output.includes(encodeURIComponent(email)), false);
+});

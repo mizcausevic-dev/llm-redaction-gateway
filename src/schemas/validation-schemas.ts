@@ -2,12 +2,6 @@ import { z } from 'zod';
 
 export const RedactSchema = z.object({
   text: z.string(),
-  excludePatternNames: z.array(z.string()).optional(),
-});
-
-export const UnredactSchema = z.object({
-  text: z.string(),
-  tokenMap: z.record(z.string()),
 });
 
 export const GatewayProcessSchema = z.object({

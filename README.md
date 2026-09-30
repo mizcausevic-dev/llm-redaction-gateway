@@ -18,8 +18,8 @@ Sister project to [`shadow-ai-detector`](https://github.com/mizcausevic-dev/shad
 
 The local API scans a sample prompt against the catalog, applies sample policy, and returns a decision that a future authenticated proxy could enforce:
 
-- **Allows** the prompt through unchanged (no sensitive content)
-- **Redacts** the prompt with stable token placeholders (`[SSN_1]`, `[EMAIL_2]`) and a reversal map for un-tokenizing the response
+- **Allows** a prompt unchanged when the catalog finds no match; detection is not exhaustive
+- **Redacts** matched spans with stable token placeholders (`[SSN_1]`, `[EMAIL_2]`); the reversal map stays in process memory
 - **Blocks** the call entirely (hard-block patterns or policy violations)
 
 On `/api/gateway/process`, detected hardpinned patterns such as credit cards, private keys, and API keys return a block decision regardless of the sample tenant policy. Pattern matching is heuristic and cannot guarantee complete detection.
@@ -56,11 +56,11 @@ These adjacent prototypes model detection and decision logic. A production DLP b
 
 Each pattern carries a default policy (`block` / `redact` / `warn`) and a token label for redaction (e.g., `SSN`, `CC`, `GITHUB_PAT`).
 
-### 2. Reversible Token-Mapped Redaction
+### 2. In-process Token-Mapped Redaction
 
-Same value → same token across the call. Two occurrences of `alice@corp.com` both become `[EMAIL_1]`. Different values get different counters: `[EMAIL_1]`, `[EMAIL_2]`. The LLM sees consistent placeholders, so its response can refer back to "[EMAIL_1]" and the gateway can un-tokenize on the way back to the caller.
+Same value → same token across the call. Two occurrences of `alice@corp.com` both become `[EMAIL_1]`. Different values get different counters: `[EMAIL_1]`, `[EMAIL_2]`. The engine retains a reversal map in memory for local tests. This prototype does not send prompts to an LLM or un-tokenize provider responses.
 
-The reversal map is returned only on `allow` / `redact` decisions — **never on block decisions**, since the map could expose the very secrets we're trying to suppress.
+HTTP responses expose a redacted preview and pattern metadata, never a separate original-prompt field, detected matched values, partial snippets, or a reversal map. When nothing matches, the preview equals the input. Even when a sample tenant policy marks a detected pattern `allow`, the returned prompt remains tokenized. Detection is pattern-based and cannot guarantee that every sensitive value is found.
 
 ### 3. Overlap Resolution
 
@@ -71,7 +71,7 @@ When two patterns match overlapping text ranges, the higher-severity one wins. A
 Policy resolution proceeds in three layers:
 
 1. **Per-pattern default** — from the catalog (`block` / `redact` / `warn`)
-2. **Per-tenant overrides** — e.g., `tenant_legal` can `allow` email passthrough for case work
+2. **Per-tenant overrides** — e.g., `tenant_legal` can mark email `allow` for the sample decision; the returned prompt still tokenizes matched email addresses
 3. **Global hardpins** — credit cards, private keys, cloud creds **always block**, no override allowed
 
 Hardpins protect the gateway from policy-misconfiguration attacks. A rogue tenant config saying `credit-card → allow` does nothing.
@@ -89,12 +89,11 @@ The audit endpoints summarize a bundled **synthetic fixture**. Runtime decisions
 | POST | `/api/gateway/process` | End-to-end: detect → policy → return allow/redact/block decision |
 | POST | `/api/gateway/evaluate-policy` | Just policy evaluation against a custom tenant policy |
 
-### Redaction (raw engine)
+### Redaction preview
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/api/redact` | Detect + tokenize input, return redacted text + token map |
-| POST | `/api/redact/unredact` | Reverse a token map back into original text |
+| POST | `/api/redact` | Detect + tokenize input, return redacted text and safe pattern metadata |
 
 ### Patterns
 
@@ -129,14 +128,12 @@ POST /api/gateway/process
   "decision": "block",
   "redactedPrompt": "",
   "hits": [
-    { "patternName": "email", "category": "pii", "severity": "low", "matchedSnippet": "ali****om", "token": "[EMAIL_1]" },
-    { "patternName": "ssn-us", "category": "pii", "severity": "high", "matchedSnippet": "123****89", "token": "[SSN_1]" },
-    { "patternName": "credit-card", "category": "pci", "severity": "critical", "matchedSnippet": "453****10", "token": "[CC_1]" }
+    { "patternName": "email", "category": "pii", "severity": "low", "startIndex": 29, "endIndex": 43, "tokenLabel": "EMAIL", "token": "[EMAIL_1]" },
+    { "patternName": "ssn-us", "category": "pii", "severity": "high", "startIndex": 59, "endIndex": 70, "tokenLabel": "SSN", "token": "[SSN_1]" },
+    { "patternName": "credit-card", "category": "pci", "severity": "critical", "startIndex": 84, "endIndex": 103, "tokenLabel": "CC", "token": "[CC_1]" }
   ],
-  "tokenMap": {},
   "policy": {
     "decision": "block",
-    "tenantId": "tenant_default",
     "hitCount": 3,
     "hardBlockTriggered": true,
     "blockingReasons": ["credit-card (critical) — hard-block pattern."],
@@ -147,7 +144,7 @@ POST /api/gateway/process
 }
 ```
 
-The credit-card hard-block triggered. Token map is empty (since the prompt is blocked, returning the map would leak the very secret we suppressed).
+The credit-card hard-block triggered. No prompt or reversal map is returned. The hit positions are illustrative; the endpoint computes them from the submitted text.
 
 ## API Snapshot
 
@@ -183,15 +180,15 @@ Visit:
 npm test
 ```
 
-The suite covers redaction, policy decisions, synthetic audit summaries, and regression checks for blocked-secret response leakage and caller-controlled detector exclusion.
+The suite covers redaction, policy decisions, synthetic audit summaries, and regression checks for matched-value response leakage, query-string access logs, and caller-controlled detector exclusion.
 
 ## What This Demonstrates
 
 - Defense-in-depth thinking — pattern catalog + tenant policy + hardpin layer
-- Reversible token mapping that preserves semantic continuity for the LLM
+- Deterministic token mapping with a server-side reversal helper
 - Overlap resolution by severity (the boring detail that matters)
 - Hardpins designed to survive misconfigured tenant policies
-- Token-map suppression on block decisions (you don't return the secrets you blocked)
+- Token-map suppression on every HTTP decision (the API does not return the secrets it detected)
 - Strict-mode TypeScript with focused tests; CI matrix on Node 20 + 22
 
 ## Future Enhancements
@@ -206,7 +203,7 @@ The suite covers redaction, policy decisions, synthetic audit summaries, and reg
 ## Tech Stack
 
 - Node.js, TypeScript, Express, Zod
-- Helmet, CORS, Morgan
+- Helmet, Morgan
 - Node test runner
 
 ## Portfolio Links

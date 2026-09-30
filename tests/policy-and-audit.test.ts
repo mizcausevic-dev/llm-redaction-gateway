@@ -38,7 +38,7 @@ test('evaluatePolicy: CONFIDENTIAL marker blocks by default', () => {
   assert.ok(p.blockingReasons.length >= 1);
 });
 
-test('evaluatePolicy: tenant override allows email passthrough', () => {
+test('evaluatePolicy: tenant allow override still returns a tokenized prompt', () => {
   const r = redactText('Reach out to user@corp.com');
   const policy: TenantPolicy = {
     tenantId: 'tenant_legal',
@@ -51,8 +51,10 @@ test('evaluatePolicy: tenant override allows email passthrough', () => {
   assert.ok(p.appliedOverrides.length >= 1);
   const decision = processGatewayRequest(r, policy);
   assert.equal(decision.decision, 'allow');
-  assert.equal(decision.redactedPrompt, r.original);
-  assert.equal(decision.hits[0].matchedSnippet.includes('user@corp.com'), false);
+  assert.match(decision.redactedPrompt, /\[EMAIL_1\]/);
+  assert.equal(JSON.stringify(decision).includes('user@corp.com'), false);
+  assert.equal('matchedSnippet' in decision.hits[0], false);
+  assert.equal('tokenMap' in decision, false);
 });
 
 test('evaluatePolicy: tenant override can escalate redact → block', () => {
@@ -68,12 +70,12 @@ test('evaluatePolicy: tenant override can escalate redact → block', () => {
   assert.equal(p.decision, 'block');
 });
 
-test('processGatewayRequest: blocked decision returns empty prompt + map', () => {
+test('processGatewayRequest: blocked decision returns empty prompt without reversal map', () => {
   const r = redactText('Secret: AKIAIOSFODNN7EXAMPLE');
   const decision = processGatewayRequest(r);
   assert.equal(decision.decision, 'block');
   assert.equal(decision.redactedPrompt, '');
-  assert.deepEqual(decision.tokenMap, {});
+  assert.equal('tokenMap' in decision, false);
 });
 
 test('processGatewayRequest: redact decision passes through tokenized prompt', () => {
@@ -81,7 +83,7 @@ test('processGatewayRequest: redact decision passes through tokenized prompt', (
   const decision = processGatewayRequest(r);
   assert.equal(decision.decision, 'redact');
   assert.match(decision.redactedPrompt, /\[EMAIL_1\]/);
-  assert.ok(Object.keys(decision.tokenMap).length > 0);
+  assert.equal('tokenMap' in decision, false);
 });
 
 test('processGatewayRequest: allow decision returns original prompt unchanged', () => {

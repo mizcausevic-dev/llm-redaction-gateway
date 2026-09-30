@@ -30,6 +30,35 @@ export interface RedactionResult {
   byCategory: Record<Category, number>;
 }
 
+// Public API responses are explicit projections. The reversal map, original
+// prompt, and even partial match snippets stay inside the process.
+export type PublicDetectionHit = Pick<DetectionHit,
+  'patternName' | 'category' | 'severity' | 'startIndex' | 'endIndex' | 'tokenLabel' | 'token'>;
+
+export interface PublicRedactionResult {
+  redacted: string;
+  hits: PublicDetectionHit[];
+  highestSeverity: Severity | null;
+  byCategory: Record<Category, number>;
+}
+
+export function toPublicRedactionResult(result: RedactionResult): PublicRedactionResult {
+  return {
+    redacted: result.redacted,
+    hits: result.hits.map((hit) => ({
+      patternName: hit.patternName,
+      category: hit.category,
+      severity: hit.severity,
+      startIndex: hit.startIndex,
+      endIndex: hit.endIndex,
+      tokenLabel: hit.tokenLabel,
+      token: hit.token,
+    })),
+    highestSeverity: result.highestSeverity,
+    byCategory: result.byCategory,
+  };
+}
+
 const SEV_RANK: Record<Severity, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
 function redactSnippet(s: string): string {

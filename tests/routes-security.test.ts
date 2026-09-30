@@ -13,7 +13,7 @@ test('gateway hard blocks a secret even when caller requests pattern exclusion',
   assert.equal(response.status, 200);
   assert.equal(response.body.decision, 'block');
   assert.equal(response.body.redactedPrompt, '');
-  assert.deepEqual(response.body.tokenMap, {});
+  assert.equal('tokenMap' in response.body, false);
   assert.equal(JSON.stringify(response.body).includes(secret), false);
 });
 
@@ -25,6 +25,7 @@ test('decision metadata never returns full matched values', async () => {
   assert.equal(response.body.decision, 'redact');
   assert.equal(response.body.hits.length, 1);
   assert.equal('matchedValue' in response.body.hits[0], false);
+  assert.equal('matchedSnippet' in response.body.hits[0], false);
 });
 
 test('local API does not grant cross-origin browser access by default', async () => {

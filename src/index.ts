@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env';
+import { ACCESS_LOG_FORMAT } from './config/access-log';
 import {
   patternsRouter,
   redactRouter,
@@ -15,7 +16,7 @@ export const app = express();
 const startedAt = Date.now();
 
 app.use(helmet());
-app.use(morgan('tiny'));
+app.use(morgan(ACCESS_LOG_FORMAT));
 app.use(express.json({ limit: '256kb' }));
 
 app.get('/health', (_req, res) => {
