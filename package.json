@@ -13,7 +13,7 @@
     "eval:detection": "node --require ts-node/register scripts/evaluate-detection.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
   },
   "keywords": [
     "llm-security",
@@ -30,6 +30,7 @@
     "dotenv": "^16.4.5",
     "express": "^5.0.1",
     "helmet": "^8.0.0",
+    "jose": "6.2.12",
     "morgan": "^1.10.0",
     "zod": "^3.23.8"
   },

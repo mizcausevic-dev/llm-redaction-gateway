@@ -6,11 +6,11 @@
 
 
 [![CI](https://github.com/mizcausevic-dev/llm-redaction-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/mizcausevic-dev/llm-redaction-gateway/actions/workflows/ci.yml)
-[![Node](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-20.19%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-66FCF1)](LICENSE)
 
-Local PII and secret redaction **decision prototype**. It evaluates prompts against patterns and sample policy, then returns an allow, redact, or block decision. It does not forward requests to an LLM provider, authenticate tenants, or write a live audit trail. Do not deploy this API or send real sensitive data to it.
+Local PII and secret redaction **decision prototype**. It evaluates prompts against patterns and sample policy, then returns an allow, redact, or block decision. The default demo does not authenticate tenants. A separate loopback private-pilot mode verifies signed callers and explicit client-to-tenant grants, but neither mode forwards to an LLM provider or writes a live audit trail. Do not deploy this API or send real sensitive data to it.
 
 ## Why This Exists
 
@@ -156,7 +156,7 @@ This browser capture is from the locally running `/api/dashboard/summary` endpoi
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20 (20.19+), 22 (22.12+), or 24+
 - npm
 
 ### Setup
@@ -169,6 +169,10 @@ NODE_ENV=development GATEWAY_LOCAL_DEMO=1 npm run dev
 ```
 
 In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled API also requires both values; missing mode or opt-in, production mode, and invalid ports refuse startup.
+
+### Authenticated private-pilot rehearsal
+
+The disabled-by-default private-pilot path is for synthetic tests on loopback only. It requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, an HTTPS `GATEWAY_AUTH_ISSUER`, same-origin `GATEWAY_AUTH_JWKS_URL`, exact `GATEWAY_AUTH_AUDIENCE`, and `GATEWAY_CLIENT_TENANT_GRANTS` as explicit `client:tenant` pairs. Do not set `GATEWAY_LOCAL_DEMO` at the same time. `NODE_ENV=production` always refuses startup, even with these values. See [the private-pilot boundary](docs/PRIVATE_PILOT_BOUNDARY.md) for the token contract and remaining release gates. No real issuer or target is configured in this repository.
 
 Visit:
 
@@ -194,7 +198,7 @@ The report distinguishes supported fixture regressions from challenge cases. On 
 
 For a disposable local process-switch and rollback drill after committing a candidate, run `node scripts/drill-local-rollback.js <prior-commit-sha>`. The script compiles both commits, checks `/health` and synthetic decisions on the same loopback port, then restores the prior commit's process. It does not exercise a hosting platform, external provider, real tenant, or production rollback.
 
-The API binds to loopback, accepts only local Host headers, rejects common proxy-forwarding headers, and marks responses `Cache-Control: no-store`. Do not expose it through a reverse proxy; one that strips forwarding headers can defeat that request check. These controls reduce accidental local exposure but do not authenticate a caller or a tenant. A detected match is removed from the public preview, but unmatched sensitive text can still be returned unchanged. Do not submit real sensitive data.
+The API binds to loopback, checks the loopback peer and local Host, rejects common proxy-forwarding headers, and marks responses `Cache-Control: no-store`. Do not expose it through a reverse proxy. The default demo remains unauthenticated; the separate private-pilot decision route requires a signed, tenant-bound token. A detected match is removed from the public preview, but unmatched sensitive text can still be returned unchanged. Do not submit real sensitive data.
 
 The Host check runs before access logging and JSON parsing. A rejected streaming upload may surface as a connection reset instead of a complete HTTP 403 response when the server closes the request early; the request does not reach a decision route.
 

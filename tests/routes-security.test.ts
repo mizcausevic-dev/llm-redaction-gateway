@@ -1,13 +1,18 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import request from 'supertest';
 import { app } from '../src/index';
-import { hasProxyForwardingHeaders, isLocalHostHeader } from '../src/config/runtime-boundary';
+import { hasProxyForwardingHeaders, isLocalHostHeader, isLoopbackPeer } from '../src/config/runtime-boundary';
+import { localJsonRequest } from './local-http';
+
+const server = app.listen(0, '127.0.0.1');
+after(async () => {
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+});
 
 test('gateway hard blocks a secret even when caller requests pattern exclusion', async () => {
   const secret = 'AKIAIOSFODNN7EXAMPLE';
-  const response = await request(app).post('/api/gateway/process').send({
+  const response = await localJsonRequest(server, 'POST', '/api/gateway/process', {
     prompt: `Use ${secret} for a cloud call`,
     excludePatternNames: ['aws-access-key'],
   });
@@ -19,14 +24,14 @@ test('gateway hard blocks a secret even when caller requests pattern exclusion',
 });
 
 test('gateway hard blocks a valid card shape but allows a checksum-invalid ticket', async () => {
-  const card = await request(app).post('/api/gateway/process').send({
+  const card = await localJsonRequest(server, 'POST', '/api/gateway/process', {
     prompt: 'Card 4532-1234-5678-9014',
   });
   assert.equal(card.status, 200);
   assert.equal(card.body.decision, 'block');
   assert.equal(card.body.redactedPrompt, '');
 
-  const ticket = await request(app).post('/api/gateway/process').send({
+  const ticket = await localJsonRequest(server, 'POST', '/api/gateway/process', {
     prompt: 'Ticket 1234-5678-9012-3456',
   });
   assert.equal(ticket.status, 200);
@@ -35,7 +40,7 @@ test('gateway hard blocks a valid card shape but allows a checksum-invalid ticke
 });
 
 test('decision metadata never returns full matched values', async () => {
-  const response = await request(app).post('/api/gateway/process').send({
+  const response = await localJsonRequest(server, 'POST', '/api/gateway/process', {
     prompt: 'Please email alice@example.com',
   });
   assert.equal(response.status, 200);
@@ -46,34 +51,32 @@ test('decision metadata never returns full matched values', async () => {
 });
 
 test('local API does not grant cross-origin browser access by default', async () => {
-  const response = await request(app).get('/api/patterns').set('Origin', 'https://example.test');
+  const response = await localJsonRequest(server, 'GET', '/api/patterns', undefined, { Origin: 'https://example.test' });
   assert.equal(response.status, 200);
   assert.equal(response.headers['access-control-allow-origin'], undefined);
 });
 
 test('local API rejects a non-local Host before routing', async () => {
-  const response = await request(app)
-    .get('/health')
-    .set('Host', 'attacker.example');
+  const response = await localJsonRequest(server, 'GET', '/health', undefined, { Host: 'attacker.example' });
   assert.equal(response.status, 403);
   assert.deepEqual(response.body, { error: 'Local API only' });
   assert.equal(response.headers['cache-control'], 'no-store');
 });
 
 test('local API rejects proxy forwarding headers even with a rewritten local Host', async () => {
-  const response = await request(app)
-    .get('/health')
-    .set('Host', 'localhost:3000')
-    .set('X-Forwarded-Host', 'public.example');
+  const response = await localJsonRequest(server, 'GET', '/health', undefined,
+    { Host: 'localhost:3000', 'X-Forwarded-Host': 'public.example' });
   assert.equal(response.status, 403);
   assert.deepEqual(response.body, { error: 'Local API only' });
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.equal(isLocalHostHeader('localhost:65536'), false);
   assert.equal(hasProxyForwardingHeaders({ forwarded: 'for=public.example' }), true);
+  assert.equal(isLoopbackPeer('203.0.113.9'), false);
+  assert.equal(isLoopbackPeer('::ffff:127.0.0.1'), true);
 });
 
 test('local API marks sensitive responses non-cacheable', async () => {
-  const response = await request(app).post('/api/redact').send({ text: 'Email alice@example.com' });
+  const response = await localJsonRequest(server, 'POST', '/api/redact', { text: 'Email alice@example.com' });
   assert.equal(response.status, 200);
   assert.equal(response.headers['cache-control'], 'no-store');
 });

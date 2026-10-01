@@ -1,9 +1,9 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import morgan from 'morgan';
-import request from 'supertest';
 import { ACCESS_LOG_FORMAT } from '../src/config/access-log';
 import { app } from '../src/index';
+import { localJsonRequest } from './local-http';
 
 const email = 'privacy-probe@example.com';
 const server = app.listen(0, '127.0.0.1');
@@ -24,11 +24,11 @@ function assertNoMatchedValueInResponse(body: unknown): void {
 
 test('all redaction and policy response paths keep matched values server-side', async () => {
   const requests = [
-    () => request(server).post('/api/redact').send({ text: `Email ${email}` }),
-    () => request(server).post('/api/gateway/process').send({ prompt: `Email ${email}` }),
-    () => request(server).post('/api/gateway/process').send({ prompt: `Email ${email}`, tenantId: 'tenant_legal' }),
-    () => request(server).post('/api/gateway/evaluate-policy').send({ text: `Email ${email}` }),
-    () => request(server).post('/api/gateway/evaluate-policy').send({
+    () => localJsonRequest(server, 'POST', '/api/redact', { text: `Email ${email}` }),
+    () => localJsonRequest(server, 'POST', '/api/gateway/process', { prompt: `Email ${email}` }),
+    () => localJsonRequest(server, 'POST', '/api/gateway/process', { prompt: `Email ${email}`, tenantId: 'tenant_legal' }),
+    () => localJsonRequest(server, 'POST', '/api/gateway/evaluate-policy', { text: `Email ${email}` }),
+    () => localJsonRequest(server, 'POST', '/api/gateway/evaluate-policy', {
       text: `Email ${email}`,
       tenantPolicy: {
         tenantId: email,
@@ -46,7 +46,7 @@ test('all redaction and policy response paths keep matched values server-side', 
 });
 
 test('invalid policy input does not reflect caller values in validation errors', async () => {
-  const response = await request(server).post('/api/gateway/evaluate-policy').send({
+  const response = await localJsonRequest(server, 'POST', '/api/gateway/evaluate-policy', {
     text: `Email ${email}`,
     tenantPolicy: {
       tenantId: 'test-policy',
@@ -59,7 +59,7 @@ test('invalid policy input does not reflect caller values in validation errors',
 });
 
 test('raw redaction endpoint ignores caller-requested detector exclusion', async () => {
-  const response = await request(server).post('/api/redact').send({
+  const response = await localJsonRequest(server, 'POST', '/api/redact', {
     text: `Email ${email}`,
     excludePatternNames: ['email'],
   });
@@ -69,7 +69,7 @@ test('raw redaction endpoint ignores caller-requested detector exclusion', async
 });
 
 test('public unredact endpoint cannot return original values', async () => {
-  const response = await request(server).post('/api/redact/unredact').send({
+  const response = await localJsonRequest(server, 'POST', '/api/redact/unredact', {
     text: 'Email [EMAIL_1]',
     tokenMap: { '[EMAIL_1]': email },
   });
