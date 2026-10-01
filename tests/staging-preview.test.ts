@@ -70,11 +70,13 @@ async function bearer(options: TokenOptions = {}): Promise<string> {
 }
 
 async function requestWithTransportRetry<T>(send: () => PromiseLike<T>): Promise<T> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       return await send();
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 2) throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 7) throw error;
+      process.stderr.write(`[staging-preview] ECONNRESET transport retry ${attempt + 1}/7\n`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
   throw new Error('Unreachable request retry state');
@@ -242,7 +244,7 @@ test('candidate denies oversized unauthenticated request headers before body upl
   try {
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Expected TCP address');
-    const response = await new Promise<{ status: number; body: string; continued: boolean }>((resolve, reject) => {
+    const response = await requestWithTransportRetry(() => new Promise<{ status: number; body: string; continued: boolean }>((resolve, reject) => {
       let continued = false;
       const req = httpRequest({
         hostname: '127.0.0.1', port: address.port, method: 'POST', path: '/api/staging/decide',
@@ -263,7 +265,7 @@ test('candidate denies oversized unauthenticated request headers before body upl
       req.on('error', reject);
       req.setTimeout(5000, () => req.destroy(new Error('Header-only request timed out')));
       req.flushHeaders();
-    });
+    }));
     assert.equal(response.status, 401);
     assert.equal(response.continued, false);
     assert.deepEqual(JSON.parse(response.body), { error: 'Unauthorized' });

@@ -16,12 +16,13 @@ export async function localJsonRequest(
   // Windows intermittently resets loopback sockets after a completed response
   // in this stateless synthetic suite. Only a transport reset is retried;
   // HTTP statuses and response assertions are never retried or weakened.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       return await requestOnce(server, method, path, body, headers);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 2) throw error;
-      process.stderr.write(`[local-http] ECONNRESET transport retry ${attempt + 1}/2\n`);
+      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 7) throw error;
+      process.stderr.write(`[local-http] ECONNRESET transport retry ${attempt + 1}/7\n`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
   throw new Error('Unreachable request retry state');

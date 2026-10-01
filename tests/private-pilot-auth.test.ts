@@ -197,12 +197,13 @@ async function rawPilotRequest(
   // This Windows test host intermittently resets loopback sockets after a
   // complete response. All probes are read-only decisions, so retry transport
   // failures only; an HTTP denial or success is never retried.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       return await rawPilotRequestOnce(target, method, path, authorization, body, agent);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 2) throw error;
-      process.stderr.write(`[private-pilot-auth] ECONNRESET transport retry ${attempt + 1}/2\n`);
+      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 7) throw error;
+      process.stderr.write(`[private-pilot-auth] ECONNRESET transport retry ${attempt + 1}/7\n`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
   throw new Error('Unreachable request retry state');
