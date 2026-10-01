@@ -172,7 +172,7 @@ In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO 
 
 ### Authenticated private-pilot rehearsal
 
-The disabled-by-default private-pilot path is for synthetic tests on loopback only. It requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, an HTTPS `GATEWAY_AUTH_ISSUER`, same-origin `GATEWAY_AUTH_JWKS_URL`, exact `GATEWAY_AUTH_AUDIENCE`, and `GATEWAY_CLIENT_TENANT_GRANTS` as explicit `client:tenant` pairs. Do not set `GATEWAY_LOCAL_DEMO` at the same time. `NODE_ENV=production` always refuses startup, even with these values. See [the private-pilot boundary](docs/PRIVATE_PILOT_BOUNDARY.md) for the token contract and remaining release gates. No real issuer or target is configured in this repository.
+The disabled-by-default private-pilot path is for synthetic tests on loopback only. It requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, an HTTPS `GATEWAY_AUTH_ISSUER`, same-origin `GATEWAY_AUTH_JWKS_URL`, exact `GATEWAY_AUTH_AUDIENCE`, and `GATEWAY_CLIENT_TENANT_GRANTS` as explicit `client:tenant` pairs. Do not set `GATEWAY_LOCAL_DEMO` at the same time. The pilot limits API attempts to one shared 60-per-minute loopback quota before token verification; this process-local limit does not replace a trusted ingress quota. `NODE_ENV=production` always refuses startup, even with these values. See [the private-pilot boundary](docs/PRIVATE_PILOT_BOUNDARY.md) for the token contract and remaining release gates. No real issuer or target is configured in this repository.
 
 Visit:
 

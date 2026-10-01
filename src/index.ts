@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { rateLimit } from 'express-rate-limit';
 import type { JWTVerifyGetKey } from 'jose';
 import { env, type RuntimeEnv } from './config/env';
 import { ACCESS_LOG_FORMAT } from './config/access-log';
@@ -39,8 +40,19 @@ export function createApp(
     next();
   });
   app.use(morgan(ACCESS_LOG_FORMAT, accessLogStream ? { stream: accessLogStream } : undefined));
-  // Signed caller identity is checked before the request body is parsed.
+  // Bound failed authentication and JWKS work before parsing the request body.
+  // This process-local store is for the loopback pilot only.
   if (runtime.mode === 'private-pilot') {
+    app.use('/api', rateLimit({
+      windowMs: 60_000,
+      limit: 60,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      // Every accepted 127/8 peer shares one quota; local source aliases must
+      // not create fresh buckets. This can let one local caller exhaust it.
+      keyGenerator: () => 'loopback-pilot',
+      message: { error: 'Too many requests' },
+    }));
     app.use('/api', createCallerAuth(runtime.auth, getKey));
   }
   app.use(express.json({ limit: '256kb' }));

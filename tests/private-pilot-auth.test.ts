@@ -1,6 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { request as httpRequest } from 'node:http';
+import { Agent, request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import express from 'express';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
@@ -119,6 +119,53 @@ test('pilot API rejects missing, malformed, oversized, and duplicate credentials
   assert.ok(duplicateStatus === 400 || duplicateStatus === 401);
 });
 
+test('pilot limits repeated API attempts before authentication', async () => {
+  const quietApp = createApp(parseRuntimeEnv(pilotVariables), localKeyResolver, { write: () => {} });
+  const wrapper = express();
+  wrapper.use((req, _res, next) => {
+    if (req.headers['x-test-loopback-peer'] === 'alternate') {
+      Object.defineProperty(req.socket, 'remoteAddress', { configurable: true, value: '127.0.0.2' });
+    }
+    next();
+  });
+  wrapper.use(quietApp);
+  const agent = new Agent({ keepAlive: true, maxSockets: 1 });
+  const limitedServer = await new Promise<Server>((resolve) => {
+    const listening = wrapper.listen(0, '127.0.0.1', () => resolve(listening));
+  });
+  try {
+    let deniedCount = 0;
+    let limited: Awaited<ReturnType<typeof rawPilotRequest>> | undefined;
+    for (let attempt = 0; attempt <= 60; attempt++) {
+      const response = await rawPilotRequest(limitedServer, 'POST', '/api/gateway/process', undefined, undefined, agent);
+      if (response.status === 429) {
+        limited = response;
+        break;
+      }
+      assert.equal(response.status, 401, `attempt ${attempt + 1}`);
+      deniedCount++;
+    }
+    // A visible ECONNRESET test-client retry can consume an extra server slot.
+    assert.ok(deniedCount > 0 && deniedCount <= 60);
+    assert.ok(limited);
+    assert.equal(limited.status, 429);
+    assert.deepEqual(limited.body, { error: 'Too many requests' });
+    assert.equal(limited.headers['cache-control'], 'no-store');
+    assert.ok(limited.headers['retry-after']);
+    const alias = await localJsonRequest(limitedServer, 'POST', '/api/gateway/process', undefined,
+      { 'X-Test-Loopback-Peer': 'alternate' });
+    assert.equal(alias.status, 429);
+    const forwarded = await localJsonRequest(limitedServer, 'POST', '/api/gateway/process', undefined,
+      { Forwarded: 'for=127.0.0.3' });
+    assert.equal(forwarded.status, 403);
+    const health = await rawPilotRequest(limitedServer, 'GET', '/health', undefined, undefined, agent);
+    assert.equal(health.status, 200);
+  } finally {
+    agent.destroy();
+    await new Promise<void>((resolve, reject) => limitedServer.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
 async function rawDuplicateAuthorization(server: Server, bearer: string): Promise<number | undefined> {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Expected TCP address');
@@ -145,13 +192,14 @@ async function rawPilotRequest(
   path: string,
   authorization?: string,
   body?: unknown,
+  agent?: Agent,
 ): Promise<{ status: number | undefined; body: Record<string, unknown>; headers: Record<string, string | string[] | undefined> }> {
   // This Windows test host intermittently resets loopback sockets after a
   // complete response. All probes are read-only decisions, so retry transport
   // failures only; an HTTP denial or success is never retried.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await rawPilotRequestOnce(target, method, path, authorization, body);
+      return await rawPilotRequestOnce(target, method, path, authorization, body, agent);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET' || attempt === 2) throw error;
       process.stderr.write(`[private-pilot-auth] ECONNRESET transport retry ${attempt + 1}/2\n`);
@@ -166,6 +214,7 @@ async function rawPilotRequestOnce(
   path: string,
   authorization?: string,
   body?: unknown,
+  agent?: Agent,
 ): Promise<{ status: number | undefined; body: Record<string, unknown>; headers: Record<string, string | string[] | undefined> }> {
   const address = target.address();
   if (!address || typeof address === 'string') throw new Error('Expected TCP address');
@@ -176,9 +225,10 @@ async function rawPilotRequestOnce(
       port: address.port,
       method,
       path,
+      agent,
       headers: {
         Host: `localhost:${address.port}`,
-        Connection: 'close',
+        Connection: agent ? 'keep-alive' : 'close',
         'Content-Length': Buffer.byteLength(serialized),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(authorization === undefined ? {} : { Authorization: authorization }),
