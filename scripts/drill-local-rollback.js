@@ -92,6 +92,9 @@ function expect(actual, expected, label) {
 }
 
 async function main() {
+  if (run('git', ['-c', `safe.directory=${root.replace(/\\/g, '/')}`, 'status', '--porcelain'])) {
+    throw new Error('Commit the candidate before the local drill so the tested code matches candidateOid');
+  }
   const baselineOid = run('git', ['-c', `safe.directory=${root.replace(/\\/g, '/')}`, 'rev-parse', baselineRef]);
   const candidateOid = run('git', ['-c', `safe.directory=${root.replace(/\\/g, '/')}`, 'rev-parse', 'HEAD']);
   if (baselineOid === candidateOid) throw new Error('Baseline and candidate commits must differ');
@@ -105,24 +108,32 @@ async function main() {
 
   const port = await unusedPort();
   const checks = [];
+  const challenge = 'user [at] example [dot] com';
   const ticket = 'Ticket 1234-5678-9012-3456';
   const card = 'Card 4532-1234-5678-9014';
 
   await start(baseline, port);
-  expect((await decide(port, ticket)).decision, 'block', 'baseline behavior');
-  checks.push('baseline healthy; checksum-invalid ticket blocked');
+  const oldDecision = await decide(port, challenge);
+  expect(oldDecision.decision, 'allow', 'baseline challenge miss');
+  expect(oldDecision.redactedPrompt, challenge, 'baseline unchanged prompt');
+  checks.push('baseline healthy; synthetic obfuscated-email challenge missed');
   await stop();
 
   await start(root, port);
+  const newDecision = await decide(port, challenge);
+  expect(newDecision.decision, 'redact', 'candidate challenge detection');
+  expect(newDecision.redactedPrompt.includes(challenge), false, 'candidate tokenized prompt');
   expect((await decide(port, ticket)).decision, 'allow', 'candidate ticket behavior');
   expect((await decide(port, card)).decision, 'block', 'candidate card behavior');
-  checks.push('candidate healthy; invalid ticket allowed; valid card blocked');
+  checks.push('candidate healthy; synthetic challenge tokenized, invalid ticket allowed, valid card blocked');
   await stop();
 
   await start(baseline, port);
-  expect((await decide(port, ticket)).decision, 'block', 'rollback behavior');
-  checks.push('rollback healthy on same port; baseline behavior restored');
-  console.log(JSON.stringify({ simulationOnly: true, baselineOid, candidateOid, checks }, null, 2));
+  const restoredDecision = await decide(port, challenge);
+  expect(restoredDecision.decision, 'allow', 'restored baseline challenge miss');
+  expect(restoredDecision.redactedPrompt, challenge, 'restored unchanged prompt');
+  checks.push('baseline restored on same port; previous detection miss returned');
+  console.log(JSON.stringify({ simulationOnly: true, unsafeAsReleaseRollback: true, baselineOid, candidateOid, checks }, null, 2));
 }
 
 main().catch((error) => {

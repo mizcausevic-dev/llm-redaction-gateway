@@ -108,13 +108,15 @@ export function redactText(input: string, options: RedactionOptions = {}): Redac
 
   const accepted: RawMatch[] = [];
   for (const m of rawMatches) {
-    const overlapping = accepted.find((a) => a.start < m.end && a.end > m.start);
+    // Starts are sorted and accepted ranges do not overlap, so only the last
+    // accepted range can overlap the current candidate.
+    const last = accepted[accepted.length - 1];
+    const overlapping = last && last.start < m.end && last.end > m.start;
     if (!overlapping) {
       accepted.push(m);
-    } else if (SEV_RANK[m.pattern.severity] > SEV_RANK[overlapping.pattern.severity]) {
+    } else if (SEV_RANK[m.pattern.severity] > SEV_RANK[last.pattern.severity]) {
       // Replace lower-severity overlap with higher-severity one
-      const idx = accepted.indexOf(overlapping);
-      accepted[idx] = m;
+      accepted[accepted.length - 1] = m;
     }
     // else: keep existing (higher- or equal-severity)
   }
@@ -134,16 +136,18 @@ export function redactText(input: string, options: RedactionOptions = {}): Redac
     }
   }
 
-  // Apply replacements in reverse order to keep indices stable
-  accepted.sort((a, b) => b.start - a.start);
-  let redacted = input;
+  // Build the public text once from original ranges. Repeatedly slicing the
+  // growing full string is quadratic for dense inputs.
+  const chunks: string[] = [];
+  let cursor = 0;
   for (const m of accepted) {
-    const token = valueToToken.get(m.value)!;
-    redacted = redacted.slice(0, m.start) + token + redacted.slice(m.end);
+    chunks.push(input.slice(cursor, m.start), valueToToken.get(m.value)!);
+    cursor = m.end;
   }
+  chunks.push(input.slice(cursor));
+  const redacted = chunks.join('');
 
   // Build hit records (in original order)
-  accepted.sort((a, b) => a.start - b.start);
   const hits: DetectionHit[] = accepted.map((m) => ({
     patternName: m.pattern.name,
     category: m.pattern.category,

@@ -45,6 +45,18 @@ function passesLuhn(value: string): boolean {
   return sum % 10 === 0;
 }
 
+function hasBoundedEmailDomain(value: string): boolean {
+  // The literal [at]/[dot] branch has its own bounded grammar. For ordinary
+  // addresses, keep the whole domain within 253 characters without limiting
+  // subdomain count, then validate DNS label lengths.
+  const at = value.indexOf('@');
+  if (at < 0) return true;
+  const labels = value.slice(at + 1).split('.');
+  return labels.length >= 2
+    && labels.every((label) => label.length >= 1 && label.length <= 63)
+    && /^[A-Za-z]{2,63}$/.test(labels[labels.length - 1]);
+}
+
 export const PATTERN_CATALOG: DetectionPattern[] = [
   // Credentials
   { name: 'private-key-block', category: 'credential', severity: 'critical', regex: /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----[\s\S]+?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/i, description: 'Private key block.', defaultPolicy: 'block', tokenLabel: 'PRIVATE_KEY' },
@@ -62,14 +74,14 @@ export const PATTERN_CATALOG: DetectionPattern[] = [
   // PII
   // Unseparated nine-digit values are too ambiguous to flag by shape alone.
   // Require an explicit SSN label for that variant.
-  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b(?:\d{3}[- .]\d{2}[- .]\d{4}|(?:SSN|Social[ \t]+Security[ \t]+(?:Number|No\.?))[ \t]*[:#]?[ \t]*\d{9})\b/gi, description: 'US SSN with separators or labeled nine-digit value.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
+  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b(?:\d{3}[- .]\d{2}[- .]\d{4}|(?:SSN|Social[ \t]{1,3}Security[ \t]{1,3}(?:Number|No\.?))(?:[ \t]{1,3}|[ \t]{0,3}[:#][ \t]{0,3})\d{9})\b/gi, description: 'US SSN with separators or labeled nine-digit value.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
   { name: 'iban', category: 'pii', severity: 'high', regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{12,28}\b/g, description: 'IBAN.', defaultPolicy: 'redact', tokenLabel: 'IBAN' },
   // Space-separated ten-digit values also require a phone/call label so
   // arbitrary reference numbers do not become phone matches.
-  { name: 'us-phone', category: 'pii', severity: 'low', regex: /(?<![A-Za-z0-9])(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b|\b(?:call|phone|tel|mobile)\b[ \t]*:?[ \t]+\d{3}[ \t]+\d{3}[ \t]+\d{4}\b/gi, description: 'US phone number, including labeled space-separated form.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
-  // Support a narrow literal [at]/[dot] spelling without treating ordinary
-  // prose containing "at" and "dot" as an address.
-  { name: 'email', category: 'pii', severity: 'low', regex: /\b(?:[\w.+-]+@[\w-]+\.[\w.-]+|[\w.+-]+[ \t]{0,3}\[[ \t]{0,3}at[ \t]{0,3}\][ \t]{0,3}[\w-]+[ \t]{0,3}\[[ \t]{0,3}dot[ \t]{0,3}\][ \t]{0,3}[A-Za-z]{2,63})\b/gi, description: 'Email address, including literal [at]/[dot] spelling.', defaultPolicy: 'redact', tokenLabel: 'EMAIL' },
+  { name: 'us-phone', category: 'pii', severity: 'low', regex: /(?<![A-Za-z0-9])(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b|\b(?:call|phone|tel|mobile)\b(?:[ \t]{1,3}|[ \t]{0,3}:[ \t]{1,3})\d{3}[ \t]{1,3}\d{3}[ \t]{1,3}\d{4}\b/gi, description: 'US phone number, including labeled space-separated form.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
+  // The length caps and left boundary also prevent repeated partial attempts
+  // inside an overlong local part or domain. Bracket spellings stay narrow.
+  { name: 'email', category: 'pii', severity: 'low', regex: /(?<![\w.+-])(?:[\w.+-]{1,64}@[\w-](?:[\w.-]{0,251}[\w-])?|[\w.+-]{1,64}[ \t]{0,3}\[[ \t]{0,3}at[ \t]{0,3}\][ \t]{0,3}[\w-]{1,63}[ \t]{0,3}\[[ \t]{0,3}dot[ \t]{0,3}\][ \t]{0,3}[A-Za-z]{2,63})(?![\w-]|\.[\w-])/gi, description: 'Email address, including literal [at]/[dot] spelling.', defaultPolicy: 'redact', tokenLabel: 'EMAIL', validate: hasBoundedEmailDomain },
   { name: 'date-of-birth', category: 'pii', severity: 'medium', regex: /\b(?:DOB|date of birth|d\.o\.b\.)[:\s]+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/gi, description: 'Date of birth marker.', defaultPolicy: 'redact', tokenLabel: 'DOB' },
   { name: 'ipv4', category: 'pii', severity: 'low', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, description: 'IPv4 address.', defaultPolicy: 'warn', tokenLabel: 'IPV4' },
 

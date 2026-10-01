@@ -42,11 +42,11 @@ Checks executed on the previous `e241271` PR head on 2026-10-01 included Node 20
 
 Checks on the current local detection candidate on 2026-10-01:
 
-- `npm.cmd test` on local Node 24.11.0: exit 0, TypeScript build and 60/60 tests, with visible synthetic HTTP transport retries.
+- `npm.cmd test` on local Node 24.11.0: exit 0, TypeScript build and 65/65 tests, with one visible synthetic HTTP transport retry. An earlier independent run failed 62/63 after exhausting both retries in an unrelated loopback transport request; the passing run does not prove transport reliability.
 - `npm.cmd run eval:detection`: exit 0; supported synthetic probes 14/14 and challenge probes 4/4. These curated probes do not close the representative detection-accuracy gate.
 - `npm.cmd audit --audit-level=moderate` and `npm.cmd audit --omit=dev --audit-level=moderate`, using a workspace npm cache after the default-cache request failed: both exit 0 with zero reported vulnerabilities.
-- `gitleaks dir . --no-banner --redact --exit-code 1`: exit 0 with no findings in a scoped ~199 KB directory scan. This is not a verified-clean audit.
-- A bounded single-regex probe over 262,016-byte long-word and many-near-match inputs had zero matches and completed each new pattern in under 2 ms on this host. It is a local performance probe, not a measured service latency target.
+- `gitleaks dir . --no-banner --redact --exit-code 1`: exit 0 with no findings in a scoped ~206 KB directory scan. This is not a verified-clean audit.
+- Bounded single-regex probes over 262,016-byte adversarial inputs had zero matches and completed the tested new patterns in under 3 ms each on this host. A 228,000-byte, 12,000-hit whole-engine synthetic probe took 9.87 ms after the overlap/output fix, versus 1,140.45 ms before it. These local probes are not a service latency target.
 
 Exact-head CI and CodeQL need to run after this candidate is pushed. Representative data, a real issuer, provider egress, hosted monitoring, and restoration at a private target remain blocked.
 
