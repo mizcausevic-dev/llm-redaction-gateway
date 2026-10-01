@@ -2,18 +2,11 @@ import { z } from 'zod';
 
 export const RedactSchema = z.object({
   text: z.string(),
-  excludePatternNames: z.array(z.string()).optional(),
-});
-
-export const UnredactSchema = z.object({
-  text: z.string(),
-  tokenMap: z.record(z.string()),
 });
 
 export const GatewayProcessSchema = z.object({
-  prompt: z.string(),
+  prompt: z.string().min(1).max(100_000),
   tenantId: z.string().optional(),
-  excludePatternNames: z.array(z.string()).optional(),
 });
 
 const PolicyOverrideSchema = z.object({
