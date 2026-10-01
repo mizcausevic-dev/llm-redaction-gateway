@@ -170,9 +170,13 @@ NODE_ENV=development GATEWAY_LOCAL_DEMO=1 npm run dev
 
 In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled API also requires both values; missing mode or opt-in, production mode, and invalid ports refuse startup.
 
+### Synthetic preview preparation
+
+This branch also contains a separate, disabled-by-default Vercel preview adapter. Its first commit is deliberately safe-deny and responds only to `/health`; it cannot make decisions. It is not deployed. The required platform protection, synthetic caller token, and restoration procedure are in [the staging-preview boundary](docs/STAGING_PREVIEW_BOUNDARY.md). The local demo and loopback private pilot remain separate.
+
 ### Authenticated private-pilot rehearsal
 
-The disabled-by-default private-pilot path is for synthetic tests on loopback only. It requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, an HTTPS `GATEWAY_AUTH_ISSUER`, same-origin `GATEWAY_AUTH_JWKS_URL`, exact `GATEWAY_AUTH_AUDIENCE`, and `GATEWAY_CLIENT_TENANT_GRANTS` as explicit `client:tenant` pairs. Do not set `GATEWAY_LOCAL_DEMO` at the same time. The pilot limits API attempts to one shared 60-per-minute loopback quota before token verification; this process-local limit does not replace a trusted ingress quota. `NODE_ENV=production` always refuses startup, even with these values. See [the private-pilot boundary](docs/PRIVATE_PILOT_BOUNDARY.md) for the token contract and remaining release gates. No real issuer or target is configured in this repository.
+The disabled-by-default private-pilot path is for synthetic tests on loopback only. It requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, an HTTPS `GATEWAY_AUTH_ISSUER`, same-origin `GATEWAY_AUTH_JWKS_URL`, exact `GATEWAY_AUTH_AUDIENCE`, and `GATEWAY_CLIENT_TENANT_GRANTS` as explicit `client:tenant` pairs. Do not set `GATEWAY_LOCAL_DEMO` at the same time. The pilot limits API attempts to one shared 60-per-minute loopback quota before token verification; this process-local limit does not replace a trusted ingress quota. `NODE_ENV=production` with private-pilot values refuses startup; the separate exact Vercel preview mode is documented above. See [the private-pilot boundary](docs/PRIVATE_PILOT_BOUNDARY.md) for the token contract and remaining release gates. No real issuer or target is configured in this repository.
 
 Visit:
 
