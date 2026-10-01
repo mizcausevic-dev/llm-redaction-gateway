@@ -1,7 +1,6 @@
 // Detection pattern catalog. Each pattern carries a category, severity,
-// and policy default (block / redact / warn). The catalog is deliberately
-// expanded vs shadow-ai-detector because this gateway is the LAST line of
-// defense before egress — false negatives here mean leaked secrets.
+// and policy default (block / redact / warn). This remains a local decision
+// prototype, not an enforcing egress boundary; misses are expected.
 
 export type Category =
   | 'credential'
@@ -37,13 +36,13 @@ export const PATTERN_CATALOG: DetectionPattern[] = [
   { name: 'openai-key', category: 'credential', severity: 'critical', regex: /\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{30,}\b/g, description: 'OpenAI-style secret key.', defaultPolicy: 'block', tokenLabel: 'OPENAI_KEY' },
   { name: 'anthropic-key', category: 'credential', severity: 'critical', regex: /\bsk-ant-[A-Za-z0-9_-]{40,}\b/g, description: 'Anthropic API key.', defaultPolicy: 'block', tokenLabel: 'ANTHROPIC_KEY' },
   { name: 'jwt-token', category: 'credential', severity: 'high', regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, description: 'JWT token.', defaultPolicy: 'redact', tokenLabel: 'JWT' },
-  { name: 'generic-api-key', category: 'credential', severity: 'high', regex: /\b(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?token)\s*[:=]\s*["']?([A-Za-z0-9_-]{20,})["']?/gi, description: 'Generic API/secret key assignment.', defaultPolicy: 'block', tokenLabel: 'API_KEY' },
+  { name: 'generic-api-key', category: 'credential', severity: 'high', regex: /\b(?:api[ _-]?key|secret[ _-]?key|access[ _-]?token)\s*[:=]\s*["']?([A-Za-z0-9_-]{20,})["']?/gi, description: 'Generic API/secret key assignment.', defaultPolicy: 'block', tokenLabel: 'API_KEY' },
   { name: 'password-assign', category: 'credential', severity: 'high', regex: /\b(?:password|passwd|pwd)\s*[:=]\s*["']([^"'\s]{6,})["']/gi, description: 'Password assignment.', defaultPolicy: 'redact', tokenLabel: 'PASSWORD' },
 
   // PII
-  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b\d{3}-\d{2}-\d{4}\b/g, description: 'US SSN.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
+  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b\d{3}[- .]\d{2}[- .]\d{4}\b/g, description: 'US SSN.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
   { name: 'iban', category: 'pii', severity: 'high', regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{12,28}\b/g, description: 'IBAN.', defaultPolicy: 'redact', tokenLabel: 'IBAN' },
-  { name: 'us-phone', category: 'pii', severity: 'low', regex: /\b(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b/g, description: 'US phone number.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
+  { name: 'us-phone', category: 'pii', severity: 'low', regex: /(?<![A-Za-z0-9])(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b/g, description: 'US phone number.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
   { name: 'email', category: 'pii', severity: 'low', regex: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, description: 'Email address.', defaultPolicy: 'redact', tokenLabel: 'EMAIL' },
   { name: 'date-of-birth', category: 'pii', severity: 'medium', regex: /\b(?:DOB|date of birth|d\.o\.b\.)[:\s]+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/gi, description: 'Date of birth marker.', defaultPolicy: 'redact', tokenLabel: 'DOB' },
   { name: 'ipv4', category: 'pii', severity: 'low', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, description: 'IPv4 address.', defaultPolicy: 'warn', tokenLabel: 'IPV4' },

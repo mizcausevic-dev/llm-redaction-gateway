@@ -25,3 +25,5 @@ jobs:
         run: npm run build
       - name: Test
         run: npm test
+      - name: Synthetic detection regression
+        run: npm run eval:detection

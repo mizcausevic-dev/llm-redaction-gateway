@@ -14,10 +14,23 @@ import {
 
 export const app = express();
 const startedAt = Date.now();
+const LOCAL_HOST = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i;
 
 app.use(helmet());
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 app.use(morgan(ACCESS_LOG_FORMAT));
 app.use(express.json({ limit: '256kb' }));
+app.use((req, res, next) => {
+  // Loopback binding alone does not stop browser DNS rebinding to a local API.
+  if (typeof req.headers.host !== 'string' || !LOCAL_HOST.test(req.headers.host)) {
+    res.status(403).json({ error: 'Local API only' });
+    return;
+  }
+  next();
+});
 
 app.get('/health', (_req, res) => {
   res.json({

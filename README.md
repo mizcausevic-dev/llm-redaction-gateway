@@ -182,6 +182,16 @@ npm test
 
 The suite covers redaction, policy decisions, synthetic audit summaries, and regression checks for matched-value response leakage, query-string access logs, and caller-controlled detector exclusion.
 
+Run the curated synthetic detector probes separately:
+
+```bash
+npm run eval:detection
+```
+
+The report distinguishes supported fixture regressions from challenge cases. On this candidate, the 14 supported cases match expectations; all four challenge cases expose a miss or false positive. See [detection evaluation](docs/DETECTION_EVAL.md) for the cases and limits. These counts are not real-world recall or precision.
+
+The API binds to loopback, accepts only local Host headers, and marks responses `Cache-Control: no-store`. Those controls reduce accidental local exposure; they do not authenticate a caller or a tenant. A detected match is removed from the public preview, but unmatched sensitive text can still be returned unchanged. Do not submit real sensitive data.
+
 ## What This Demonstrates
 
 - Defense-in-depth thinking — pattern catalog + tenant policy + hardpin layer

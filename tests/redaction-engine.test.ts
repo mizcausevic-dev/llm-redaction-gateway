@@ -17,6 +17,24 @@ test('redactText: SSN replaced with stable token', () => {
   assert.doesNotMatch(r.redacted, /123-45-6789/);
 });
 
+test('redactText: common SSN separators are tokenized', () => {
+  for (const value of ['123-45-6789', '123 45 6789', '123.45.6789']) {
+    const result = redactText(`SSN: ${value}`);
+    assert.ok(result.hits.some((hit) => hit.patternName === 'ssn-us'), value);
+    assert.equal(result.redacted.includes(value), false, value);
+  }
+});
+
+test('redactText: parenthesized US phone and spaced API key label are detected', () => {
+  const phone = redactText('Call (212) 555-0123');
+  assert.ok(phone.hits.some((hit) => hit.patternName === 'us-phone'));
+  assert.equal(phone.redacted.includes('(212) 555-0123'), false);
+
+  const key = redactText('api key: abcdefghijklmnopqrstuvwxyz123456');
+  assert.ok(key.hits.some((hit) => hit.patternName === 'generic-api-key'));
+  assert.equal(key.redacted.includes('abcdefghijklmnopqrstuvwxyz123456'), false);
+});
+
 test('redactText: same value gets same token across the call', () => {
   const r = redactText('Email a@x.com and b@x.com and a@x.com again.');
   // a@x.com appears twice, b@x.com once → two unique tokens, one reused

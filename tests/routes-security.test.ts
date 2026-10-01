@@ -34,6 +34,22 @@ test('local API does not grant cross-origin browser access by default', async ()
   assert.equal(response.headers['access-control-allow-origin'], undefined);
 });
 
+test('local API rejects a non-local Host before processing prompts', async () => {
+  const response = await request(app)
+    .post('/api/gateway/process')
+    .set('Host', 'attacker.example')
+    .send({ prompt: 'Email alice@example.com' });
+  assert.equal(response.status, 403);
+  assert.deepEqual(response.body, { error: 'Local API only' });
+  assert.equal(response.headers['cache-control'], 'no-store');
+});
+
+test('local API marks sensitive responses non-cacheable', async () => {
+  const response = await request(app).post('/api/redact').send({ text: 'Email alice@example.com' });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['cache-control'], 'no-store');
+});
+
 test('production API startup fails closed', () => {
   const child = spawnSync(process.execPath, ['--require', 'ts-node/register', 'src/index.ts'], {
     cwd: process.cwd(),
