@@ -60,10 +60,16 @@ export const PATTERN_CATALOG: DetectionPattern[] = [
   { name: 'password-assign', category: 'credential', severity: 'high', regex: /\b(?:password|passwd|pwd)\s*[:=]\s*["']([^"'\s]{6,})["']/gi, description: 'Password assignment.', defaultPolicy: 'redact', tokenLabel: 'PASSWORD' },
 
   // PII
-  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b\d{3}[- .]\d{2}[- .]\d{4}\b/g, description: 'US SSN.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
+  // Unseparated nine-digit values are too ambiguous to flag by shape alone.
+  // Require an explicit SSN label for that variant.
+  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b(?:\d{3}[- .]\d{2}[- .]\d{4}|(?:SSN|Social[ \t]+Security[ \t]+(?:Number|No\.?))[ \t]*[:#]?[ \t]*\d{9})\b/gi, description: 'US SSN with separators or labeled nine-digit value.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
   { name: 'iban', category: 'pii', severity: 'high', regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{12,28}\b/g, description: 'IBAN.', defaultPolicy: 'redact', tokenLabel: 'IBAN' },
-  { name: 'us-phone', category: 'pii', severity: 'low', regex: /(?<![A-Za-z0-9])(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b/g, description: 'US phone number.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
-  { name: 'email', category: 'pii', severity: 'low', regex: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, description: 'Email address.', defaultPolicy: 'redact', tokenLabel: 'EMAIL' },
+  // Space-separated ten-digit values also require a phone/call label so
+  // arbitrary reference numbers do not become phone matches.
+  { name: 'us-phone', category: 'pii', severity: 'low', regex: /(?<![A-Za-z0-9])(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b|\b(?:call|phone|tel|mobile)\b[ \t]*:?[ \t]+\d{3}[ \t]+\d{3}[ \t]+\d{4}\b/gi, description: 'US phone number, including labeled space-separated form.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
+  // Support a narrow literal [at]/[dot] spelling without treating ordinary
+  // prose containing "at" and "dot" as an address.
+  { name: 'email', category: 'pii', severity: 'low', regex: /\b(?:[\w.+-]+@[\w-]+\.[\w.-]+|[\w.+-]+[ \t]{0,3}\[[ \t]{0,3}at[ \t]{0,3}\][ \t]{0,3}[\w-]+[ \t]{0,3}\[[ \t]{0,3}dot[ \t]{0,3}\][ \t]{0,3}[A-Za-z]{2,63})\b/gi, description: 'Email address, including literal [at]/[dot] spelling.', defaultPolicy: 'redact', tokenLabel: 'EMAIL' },
   { name: 'date-of-birth', category: 'pii', severity: 'medium', regex: /\b(?:DOB|date of birth|d\.o\.b\.)[:\s]+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/gi, description: 'Date of birth marker.', defaultPolicy: 'redact', tokenLabel: 'DOB' },
   { name: 'ipv4', category: 'pii', severity: 'low', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, description: 'IPv4 address.', defaultPolicy: 'warn', tokenLabel: 'IPV4' },
 

@@ -36,17 +36,18 @@ No hosted target, issuer, or known-good hosted artifact is configured. Do not de
 
 ## Progress and outcome
 
-The loopback-only pilot route now limits attempts before verifying signed caller tokens and exact client-to-tenant grants, then parses decision bodies. The production startup refusal remains unconditional. No real issuer, provider, customer data, hosted boundary, or rollback artifact was configured. A CodeQL check on the preceding candidate commit reported a new high-severity missing-rate-limiting alert; this fixed-limit change still requires an exact-head CodeQL recheck before review completion.
+The loopback-only pilot route now limits attempts before verifying signed caller tokens and exact client-to-tenant grants, then parses decision bodies. The production startup refusal remains unconditional. No real issuer, provider, customer data, hosted boundary, or rollback artifact was configured. A high-severity missing-rate-limiting alert on an earlier candidate was cleared on the previous PR head. This new detection change requires exact-head CI and CodeQL rechecks if pushed.
 
-Checks executed on 2026-10-01:
+Checks executed on the previous `e241271` PR head on 2026-10-01 included Node 20 and Node 22 suites, dependency audits, a scoped Gitleaks scan, and exact-head CodeQL. The Windows loopback test harness had visible `ECONNRESET` transport retries; it retries transport resets at most twice and never retries an HTTP status. Those older results do not verify this new detection change.
 
-- `npm.cmd run build`: exit 0.
-- `npm.cmd test` on local Node 24.11.0: exit 0, 56/56, including the 429, loopback-alias, and forwarding-header limiter assertions. Visible `ECONNRESET` transport retries occurred in synthetic HTTP tests; an independent full run passed 56/56 with seven visible retries, including one request that needed both allowed retries.
-- Full five-file `node --require ./tests/setup-env.cjs --require ts-node/register --test --test-concurrency=1` suite through `npm.cmd exec --package=node@20.19.5`: exit 0, 56/56, with visible `ECONNRESET` transport retries.
-- Focused private-pilot suite through `npm.cmd exec --package=node@22.12.0`: exit 0, 11/11, with visible transport retries. Node 22.12 emitted an experimental CommonJS-to-ESM warning for `jose`.
-- A Node 20 full run with the shared test-client retry disabled failed 54/55 after a logged HTTP 200 and `read ECONNRESET`; this is why the test-only helper retries transport resets at most twice. It never retries an HTTP status. A green result does not prove the Windows loopback transport is reliable.
-- `npm.cmd run eval:detection`: exit 0; supported synthetic probes 14/14 and challenge probes 1/4. The three misses remain release blockers.
-- `npm.cmd audit --audit-level=moderate` and `npm.cmd audit --omit=dev --audit-level=moderate`: both exit 0 with zero reported vulnerabilities.
-- `gitleaks dir . --no-banner --redact --exit-code 1`: exit 0 with no findings in the scoped ~193 KB directory scan. This is not a verified-clean audit.
+Checks on the current local detection candidate on 2026-10-01:
+
+- `npm.cmd test` on local Node 24.11.0: exit 0, TypeScript build and 60/60 tests, with visible synthetic HTTP transport retries.
+- `npm.cmd run eval:detection`: exit 0; supported synthetic probes 14/14 and challenge probes 4/4. These curated probes do not close the representative detection-accuracy gate.
+- `npm.cmd audit --audit-level=moderate` and `npm.cmd audit --omit=dev --audit-level=moderate`, using a workspace npm cache after the default-cache request failed: both exit 0 with zero reported vulnerabilities.
+- `gitleaks dir . --no-banner --redact --exit-code 1`: exit 0 with no findings in a scoped ~199 KB directory scan. This is not a verified-clean audit.
+- A bounded single-regex probe over 262,016-byte long-word and many-near-match inputs had zero matches and completed each new pattern in under 2 ms on this host. It is a local performance probe, not a measured service latency target.
+
+Exact-head CI and CodeQL need to run after this candidate is pushed. Representative data, a real issuer, provider egress, hosted monitoring, and restoration at a private target remain blocked.
 
 Production remains **BLOCKED** by real issuer and grant review, provider enforcement, representative detection evidence, abuse controls, hosted monitoring, and hosted rollback proof.

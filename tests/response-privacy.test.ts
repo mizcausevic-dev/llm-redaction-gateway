@@ -68,6 +68,21 @@ test('raw redaction endpoint ignores caller-requested detector exclusion', async
   assertNoMatchedValueInResponse(response.body);
 });
 
+test('decision endpoint does not return newly recognized synthetic values', async () => {
+  const cases = [
+    { text: 'user [at] example [dot] com', pattern: 'email' },
+    { text: 'SSN 123456789', pattern: 'ssn-us' },
+    { text: 'Call 212 555 0123', pattern: 'us-phone' },
+  ];
+  for (const item of cases) {
+    const response = await localJsonRequest(server, 'POST', '/api/gateway/process', { prompt: item.text });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.decision, 'redact');
+    assert.ok(response.body.hits.some((hit: { patternName: string }) => hit.patternName === item.pattern));
+    assert.equal(JSON.stringify(response.body).includes(item.text), false);
+  }
+});
+
 test('public unredact endpoint cannot return original values', async () => {
   const response = await localJsonRequest(server, 'POST', '/api/redact/unredact', {
     text: 'Email [EMAIL_1]',

@@ -194,7 +194,7 @@ Run the curated synthetic detector probes separately:
 npm run eval:detection
 ```
 
-The report distinguishes supported fixture regressions from challenge cases. On this candidate, the 14 supported cases match expectations; one of four challenge cases matches expectations after filtering checksum-invalid card shapes. See [detection evaluation](docs/DETECTION_EVAL.md) for the cases and limits. These counts are not real-world recall or precision.
+The report distinguishes supported fixture regressions from challenge cases. On this local candidate, the 14 supported and four challenge cases match expectations after adding narrow handling for literal `[at]`/`[dot]` email spelling, labeled joined SSNs, and labeled space-separated phones. See [detection evaluation](docs/DETECTION_EVAL.md) for the cases and limits. These counts are not real-world recall or precision.
 
 For a disposable local process-switch and rollback drill after committing a candidate, run `node scripts/drill-local-rollback.js <prior-commit-sha>`. The script compiles both commits, checks `/health` and synthetic decisions on the same loopback port, then restores the prior commit's process. It does not exercise a hosting platform, external provider, real tenant, or production rollback.
 

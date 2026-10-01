@@ -7,8 +7,8 @@ The supported group is a regression gate for formats this prototype says it hand
 | Group | Cases | Observed on 2026-10-01 candidate | Meaning |
 | --- | ---: | --- | --- |
 | Supported fixtures | 14 | 14 matched expectations | The listed examples work locally. |
-| Challenge fixtures | 4 | 1 matched expectation | Three false negatives remain. |
+| Challenge fixtures | 4 | 4 matched expectations | Three formerly missed formats now match under narrow rules. |
 
-The false negatives are an obfuscated email, an unseparated nine-digit SSN, and a space-separated US phone. A card-shaped ticket number failing the Luhn checksum is no longer hard-blocked. Luhn only filters some false positives; a Luhn-valid reference number can still be misclassified. Broadening the other patterns without a labeled corpus can increase false positives, so those remain visible limits.
+The newly matched formats are a literal `[at]`/`[dot]` email, an unseparated nine-digit value with an explicit SSN label, and a space-separated US phone with an explicit call/phone label. Tests also keep unrelated nine-digit tickets, spaced invoice numbers, and plain prose containing “at” and “dot” from matching those new variants. Unlabeled or differently obfuscated sensitive values can still pass through unchanged. A card-shaped ticket number failing the Luhn checksum is not hard-blocked, but a Luhn-valid reference number can still be misclassified. Broadening patterns without a labeled corpus can increase false positives.
 
 This is a hand-curated corpus, not a sample of customer prompts. It cannot establish recall, precision, provider safety, or compliance. A production gate needs permissioned, representative, human-labeled data with provenance and retention rules; measured false-negative and false-positive costs; adversarial variants; authenticated tenant binding; an enforcing provider boundary; and a hosted deployment and rollback drill. The disposable local process-switch drill in the README does not satisfy those production gates.

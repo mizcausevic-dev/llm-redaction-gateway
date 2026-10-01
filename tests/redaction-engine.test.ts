@@ -25,6 +25,19 @@ test('redactText: common SSN separators are tokenized', () => {
   }
 });
 
+test('redactText: joined SSN needs a label, and unrelated nine-digit IDs stay untouched', () => {
+  for (const value of ['SSN 123456789', 'SSN:123456789', 'Social Security Number: 321654987']) {
+    const labeled = redactText(value);
+    assert.deepEqual(labeled.hits.map((hit) => hit.patternName), ['ssn-us']);
+    assert.equal(labeled.redacted.includes(value), false);
+  }
+
+  const unrelated = redactText('Ticket 123456789');
+  assert.equal(unrelated.hits.some((hit) => hit.patternName === 'ssn-us'), false);
+  assert.equal(unrelated.redacted, unrelated.original);
+  assert.equal(redactText('SSN 1234567890').hits.some((hit) => hit.patternName === 'ssn-us'), false);
+});
+
 test('redactText: parenthesized US phone and spaced API key label are detected', () => {
   const phone = redactText('Call (212) 555-0123');
   assert.ok(phone.hits.some((hit) => hit.patternName === 'us-phone'));
@@ -33,6 +46,32 @@ test('redactText: parenthesized US phone and spaced API key label are detected',
   const key = redactText('api key: abcdefghijklmnopqrstuvwxyz123456');
   assert.ok(key.hits.some((hit) => hit.patternName === 'generic-api-key'));
   assert.equal(key.redacted.includes('abcdefghijklmnopqrstuvwxyz123456'), false);
+});
+
+test('redactText: space-separated phone needs a call label', () => {
+  for (const value of ['Call 212 555 0123', 'Call: 212 555 0123', 'Phone: 415 555 0199']) {
+    const labeled = redactText(value);
+    assert.deepEqual(labeled.hits.map((hit) => hit.patternName), ['us-phone']);
+    assert.equal(labeled.redacted.includes(value), false);
+  }
+
+  const unrelated = redactText('Invoice 212 555 0123');
+  assert.equal(unrelated.hits.some((hit) => hit.patternName === 'us-phone'), false);
+  assert.equal(unrelated.redacted, unrelated.original);
+  assert.equal(redactText('Call 212 555 0123x').hits.some((hit) => hit.patternName === 'us-phone'), false);
+});
+
+test('redactText: literal [at]/[dot] address is tokenized without matching plain prose', () => {
+  for (const value of ['user [at] example [dot] com', 'PERSON[AT]EXAMPLE[DOT]ORG']) {
+    const address = redactText(value);
+    assert.deepEqual(address.hits.map((hit) => hit.patternName), ['email']);
+    assert.equal(address.redacted.includes(value), false);
+  }
+
+  const prose = redactText('Look at the example dot com instructions.');
+  assert.equal(prose.hits.some((hit) => hit.patternName === 'email'), false);
+  assert.equal(prose.redacted, prose.original);
+  assert.equal(redactText('user [at] example [dot] com9').hits.some((hit) => hit.patternName === 'email'), false);
 });
 
 test('redactText: same value gets same token across the call', () => {
