@@ -1,6 +1,6 @@
 // Disposable local process-switch drill. This does not deploy the API.
 const { spawn, spawnSync } = require('node:child_process');
-const { mkdtempSync, realpathSync, rmSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, realpathSync, rmSync } = require('node:fs');
 const { createServer } = require('node:net');
 const { once } = require('node:events');
 const path = require('node:path');
@@ -101,14 +101,20 @@ async function main() {
 
   drillDir = mkdtempSync(path.join(root, '.local-release-drill-'));
   const baseline = path.join(drillDir, 'baseline');
-  // Local clone also opens the source .git directory, which can have a
-  // different owner in sandboxed Windows runs. Trust only these two paths.
-  run('git', [
-    '-c', `safe.directory=${root.replace(/\\/g, '/')}`,
-    '-c', `safe.directory=${path.join(root, '.git').replace(/\\/g, '/')}`,
-    'clone', '--quiet', '--no-hardlinks', root, baseline,
-  ]);
-  run('git', ['-c', `safe.directory=${baseline.replace(/\\/g, '/')}`, 'checkout', '--quiet', '--detach', baselineOid], baseline);
+  const archive = path.join(drillDir, 'baseline.tar');
+  mkdirSync(baseline);
+  const tree = run('git', ['-c', `safe.directory=${root.replace(/\\/g, '/')}`, 'ls-tree', '-r', baselineOid]);
+  if (tree.split(/\r?\n/).some((entry) => /^(?:120000|160000) /.test(entry))) {
+    throw new Error('Baseline contains a link or submodule; refusing archive extraction');
+  }
+  run('git', ['-c', `safe.directory=${root.replace(/\\/g, '/')}`, 'archive', '--format=tar', '--output', archive, baselineOid]);
+  // Verify every archive entry stays inside the disposable baseline before
+  // extraction; do not let a repository path escape the drill directory.
+  for (const entry of run('tar', ['-tf', archive]).split(/\r?\n/).filter(Boolean)) {
+    const relative = path.relative(baseline, path.resolve(baseline, entry));
+    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Unsafe archive path');
+  }
+  run('tar', ['-xf', archive, '-C', baseline]);
   run(process.execPath, [tsc, '-p', path.join(baseline, 'tsconfig.json')]);
   run(process.execPath, [tsc, '-p', path.join(root, 'tsconfig.json')]);
 
