@@ -1,23 +1,64 @@
 import dotenv from 'dotenv';
+import type { JSONWebKeySet } from 'jose';
 import { assertLocalDemoRuntime } from './runtime-boundary';
 
 dotenv.config();
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
-export interface PilotAuthConfig {
+export interface CallerAuthConfig {
   issuer: string;
   audience: string;
-  jwksUrl: string;
+  requiredScope: string;
   clientTenantGrants: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+export interface PilotAuthConfig extends CallerAuthConfig {
+  jwksUrl: string;
+}
+
+export interface StagingDecisionConfig {
+  auth: CallerAuthConfig;
+  publicJwks: JSONWebKeySet;
 }
 
 export type RuntimeEnv =
   | { mode: 'local-demo'; port: number; nodeEnv: 'development' | 'test' }
   | { mode: 'private-pilot'; port: number; nodeEnv: 'development'; auth: PilotAuthConfig }
-  | { mode: 'staging-preview'; port: number; nodeEnv: 'production'; allowedHosts: readonly string[] };
+  | { mode: 'staging-preview'; port: number; nodeEnv: 'production'; allowedHosts: readonly string[]; decision: StagingDecisionConfig | null };
 
 const VERCEL_HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app$/;
+const STAGING_ISSUER = 'urn:llm-redaction-gateway:synthetic-preview';
+const STAGING_AUDIENCE = 'urn:llm-redaction-gateway:synthetic-preview:api';
+const STAGING_CLIENT = 'fixture_client';
+const STAGING_TENANT = 'fixture_tenant';
+
+function readPublicStagingJwks(value: string | undefined): JSONWebKeySet {
+  if (!value || value.length > 2048) throw new Error('A bounded public-only staging JWKS is required.');
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { throw new Error('A bounded public-only staging JWKS is required.'); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+    || Object.keys(parsed).length !== 1 || !Object.hasOwn(parsed, 'keys')) {
+    throw new Error('Staging JWKS must contain exactly one public RSA key.');
+  }
+  const keys = (parsed as { keys: unknown }).keys;
+  if (!Array.isArray(keys) || keys.length !== 1) {
+    throw new Error('Staging JWKS must contain exactly one public RSA key.');
+  }
+  const key = keys[0];
+  const permitted = ['alg', 'e', 'kid', 'kty', 'n', 'use'];
+  if (!key || typeof key !== 'object' || Array.isArray(key)
+    || Object.keys(key).length !== permitted.length
+    || Object.keys(key).some((name) => !permitted.includes(name))
+    || key.kty !== 'RSA' || key.alg !== 'RS256' || key.use !== 'sig'
+    || typeof key.kid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(key.kid)
+    || key.e !== 'AQAB' || typeof key.n !== 'string'
+    || !/^[A-Za-z0-9_-]+$/.test(key.n)
+    || Buffer.from(key.n, 'base64url').length !== 256) {
+    throw new Error('Staging JWKS must contain exactly one public 2048-bit RSA signing key.');
+  }
+  return parsed as JSONWebKeySet;
+}
 
 function readVercelHost(value: string | undefined, name: string): string {
   if (!value || value.length > 253 || !VERCEL_HOST.test(value)) {
@@ -46,7 +87,22 @@ function readStagingPreview(source: NodeJS.ProcessEnv, port: number): RuntimeEnv
   if (!productionHost || productionHost === deploymentHost || productionHost === branchHost) {
     throw new Error('Staging preview hosts must differ from the production host.');
   }
-  return { mode: 'staging-preview', port, nodeEnv: 'production', allowedHosts: [deploymentHost, branchHost] };
+  let decision: StagingDecisionConfig | null = null;
+  if (source.GATEWAY_STAGING_DECISIONS !== undefined || source.GATEWAY_STAGING_PUBLIC_JWKS !== undefined) {
+    if (source.GATEWAY_STAGING_DECISIONS !== '1') {
+      throw new Error('Staging decisions require their own exact opt-in.');
+    }
+    decision = {
+      auth: {
+        issuer: STAGING_ISSUER,
+        audience: STAGING_AUDIENCE,
+        requiredScope: 'gateway:staging:decide',
+        clientTenantGrants: new Map([[STAGING_CLIENT, new Set([STAGING_TENANT])]]),
+      },
+      publicJwks: readPublicStagingJwks(source.GATEWAY_STAGING_PUBLIC_JWKS),
+    };
+  }
+  return { mode: 'staging-preview', port, nodeEnv: 'production', allowedHosts: [deploymentHost, branchHost], decision };
 }
 
 function readGrants(value: string | undefined): ReadonlyMap<string, ReadonlySet<string>> {
@@ -119,6 +175,7 @@ export function parseRuntimeEnv(source: NodeJS.ProcessEnv): RuntimeEnv {
       auth: {
         issuer: issuer.href,
         audience,
+        requiredScope: 'gateway:decide',
         jwksUrl: jwks.href,
         clientTenantGrants: readGrants(source.GATEWAY_CLIENT_TENANT_GRANTS),
       },

@@ -10,7 +10,7 @@ The existing API is an explicitly opted-in loopback demo. Its bundled policies a
 
 ## Acceptance criteria
 
-- Startup always refuses `NODE_ENV=production`. The separate nonproduction pilot requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, issuer, audience, same-origin HTTPS JWKS URL, and explicit client-to-tenant grants. Local-demo opt-in cannot be combined with pilot mode.
+- Local-demo and private-pilot startup refuse `NODE_ENV=production`. The separate nonproduction pilot requires `NODE_ENV=development`, `GATEWAY_PRIVATE_PILOT=1`, issuer, audience, same-origin HTTPS JWKS URL, and explicit client-to-tenant grants. Local-demo opt-in cannot be combined with pilot mode. A distinct synthetic Vercel preview adapter has its own exact startup gate and no real-prompt route.
 - A process request requires a verified access token with exact issuer and audience, `at+jwt` type, RS256 signature, expiry, recent issue time, subject, tenant, client, and `gateway:decide` scope.
 - The verified client-to-tenant pair must appear in the configured grants. The body must name exactly the verified tenant. Pilot decisions use catalog defaults, not bundled sample tenant policies.
 - Missing, malformed, expired, wrong-audience, wrong-issuer, wrong-scope, cross-tenant, and nongranted tokens fail before decision processing. Pilot fixture routes remain unavailable.
@@ -36,7 +36,7 @@ No hosted target, issuer, or known-good hosted artifact is configured. Do not de
 
 ## Progress and outcome
 
-The loopback-only pilot route now limits attempts before verifying signed caller tokens and exact client-to-tenant grants, then parses decision bodies. The production startup refusal remains unconditional. No real issuer, provider, customer data, hosted boundary, or rollback artifact was configured. A high-severity missing-rate-limiting alert on an earlier candidate was cleared on the previous PR head. This new detection change requires exact-head CI and CodeQL rechecks if pushed.
+The loopback-only pilot route now limits attempts before verifying signed caller tokens and exact client-to-tenant grants, then parses decision bodies. Its production startup refusal remains unconditional. No real issuer, provider, customer data, hosted boundary, or rollback artifact was configured. A high-severity missing-rate-limiting alert on an earlier candidate was cleared on the previous PR head. This new detection change requires exact-head CI and CodeQL rechecks if pushed.
 
 Checks executed on the previous `e241271` PR head on 2026-10-01 included Node 20 and Node 22 suites, dependency audits, a scoped Gitleaks scan, and exact-head CodeQL. The Windows loopback test harness had visible `ECONNRESET` transport retries; it retries transport resets at most twice and never retries an HTTP status. Those older results do not verify this new detection change.
 

@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { RequestHandler } from 'express';
-import type { PilotAuthConfig } from './env';
+import type { CallerAuthConfig, PilotAuthConfig } from './env';
 
 export interface PilotPrincipal {
   subject: string;
@@ -10,15 +10,18 @@ export interface PilotPrincipal {
 
 const BEARER = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
-const REQUIRED_SCOPE = 'gateway:decide';
 
-export function createCallerAuth(
-  config: PilotAuthConfig,
-  getKey: JWTVerifyGetKey = createRemoteJWKSet(new URL(config.jwksUrl), {
+export function createPilotCallerAuth(config: PilotAuthConfig, getKey?: JWTVerifyGetKey): RequestHandler {
+  return createCallerAuth(config, getKey ?? createRemoteJWKSet(new URL(config.jwksUrl), {
     timeoutDuration: 2000,
     cooldownDuration: 30000,
     cacheMaxAge: 300000,
-  }),
+  }));
+}
+
+export function createCallerAuth(
+  config: CallerAuthConfig,
+  getKey: JWTVerifyGetKey,
 ): RequestHandler {
   return async (req, res, next) => {
     const authorization = req.headers.authorization;
@@ -49,7 +52,7 @@ export function createCallerAuth(
         || typeof payload.sub !== 'string' || !payload.sub.trim() || payload.sub.length > 256
         || typeof tenantId !== 'string' || !IDENTIFIER.test(tenantId)
         || typeof clientId !== 'string' || !IDENTIFIER.test(clientId)
-        || typeof scope !== 'string' || !scope.split(/\s+/).includes(REQUIRED_SCOPE)
+        || typeof scope !== 'string' || !scope.split(/\s+/).includes(config.requiredScope)
         || !config.clientTenantGrants.get(clientId)?.has(tenantId)) {
         res.status(403).json({ error: 'Forbidden' });
         return;

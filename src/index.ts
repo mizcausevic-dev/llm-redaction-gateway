@@ -1,11 +1,12 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
-import type { JWTVerifyGetKey } from 'jose';
+import { createLocalJWKSet, type JWTVerifyGetKey } from 'jose';
 import { env, type RuntimeEnv } from './config/env';
 import { ACCESS_LOG_FORMAT } from './config/access-log';
-import { createCallerAuth } from './config/caller-auth';
+import { createCallerAuth, createPilotCallerAuth } from './config/caller-auth';
+import { stagingPreviewRouter } from './routes/staging-preview';
 import { hasProxyForwardingHeaders, isLocalHostHeader, isLoopbackPeer } from './config/runtime-boundary';
 import {
   patternsRouter,
@@ -51,9 +52,30 @@ export function createApp(
     next();
   });
   if (runtime.mode === 'staging-preview') {
-    // First deployable artifact is deliberately incapable of making decisions.
-    // No request body parser, caller router, provider, or audit route is mounted.
-    app.get('/health', (_req, res) => res.json({ status: 'ok', mode: 'staging-preview', decisionRoute: 'disabled' }));
+    app.get('/health', (_req, res) => res.json({
+      status: 'ok', mode: 'staging-preview', decisionRoute: runtime.decision ? 'fixture-only' : 'disabled',
+    }));
+    if (runtime.decision) {
+      // This is an instance-local throttle, not a distributed edge quota.
+      app.use('/api', rateLimit({
+        windowMs: 60_000,
+        limit: 60,
+        standardHeaders: 'draft-8',
+        legacyHeaders: false,
+        keyGenerator: () => 'synthetic-preview',
+        message: { error: 'Too many requests' },
+      }));
+      // Authentication and quota run before Express reads any body bytes.
+      app.use('/api', createCallerAuth(runtime.decision.auth, createLocalJWKSet(runtime.decision.publicJwks)));
+      app.use(express.json({ limit: '256kb' }));
+      app.use('/api/staging', stagingPreviewRouter);
+      app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+        const status = typeof error === 'object' && error !== null && 'status' in error
+          && (error.status === 400 || error.status === 413) ? error.status : 500;
+        res.status(status).json({ error: status === 413 ? 'Payload too large'
+          : status === 400 ? 'Invalid payload' : 'Internal error' });
+      });
+    }
     app.use((_req, res) => { res.status(404).json({ error: 'Not found' }); });
     return app;
   }
@@ -71,7 +93,7 @@ export function createApp(
       keyGenerator: () => 'loopback-pilot',
       message: { error: 'Too many requests' },
     }));
-    app.use('/api', createCallerAuth(runtime.auth, getKey));
+    app.use('/api', createPilotCallerAuth(runtime.auth, getKey));
   }
   app.use(express.json({ limit: '256kb' }));
 

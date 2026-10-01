@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-66FCF1)](LICENSE)
 
-Local PII and secret redaction **decision prototype**. It evaluates prompts against patterns and sample policy, then returns an allow, redact, or block decision. The default demo does not authenticate tenants. A separate loopback private-pilot mode verifies signed callers and explicit client-to-tenant grants, but neither mode forwards to an LLM provider or writes a live audit trail. Do not deploy this API or send real sensitive data to it.
+Local PII and secret redaction **decision prototype**. It evaluates prompts against patterns and sample policy, then returns an allow, redact, or block decision. The default demo does not authenticate tenants. A separate loopback private-pilot mode verifies signed callers and explicit client-to-tenant grants, but neither mode forwards to an LLM provider or writes a live audit trail. Do not deploy the demo or loopback pilot, or send real sensitive data to any mode.
 
 ## Why This Exists
 
@@ -168,11 +168,11 @@ npm ci
 NODE_ENV=development GATEWAY_LOCAL_DEMO=1 npm run dev
 ```
 
-In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled API also requires both values; missing mode or opt-in, production mode, and invalid ports refuse startup.
+In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled local demo also requires both values; missing mode or opt-in, production mode without the separate exact preview markers, and invalid ports refuse startup.
 
 ### Synthetic preview preparation
 
-This branch also contains a separate, disabled-by-default Vercel preview adapter. Its first commit is deliberately safe-deny and responds only to `/health`; it cannot make decisions. It is not deployed. The required platform protection, synthetic caller token, and restoration procedure are in [the staging-preview boundary](docs/STAGING_PREVIEW_BOUNDARY.md). The local demo and loopback private pilot remain separate.
+This branch also contains a separate, disabled-by-default Vercel preview adapter. Its first commit is deliberately safe-deny and responds only to `/health`. A later commit can evaluate four built-in synthetic fixtures only after a second opt-in and a signed fixture-only token; callers cannot submit prompt text. Neither artifact is deployed. The required platform protection, token contract, and limited restoration procedure are in [the staging-preview boundary](docs/STAGING_PREVIEW_BOUNDARY.md). The local demo and loopback private pilot remain separate.
 
 ### Authenticated private-pilot rehearsal
 
