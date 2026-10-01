@@ -20,8 +20,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Install dependencies
-        run: npm install
+        run: npm ci --ignore-scripts
       - name: Build
         run: npm run build
       - name: Test
         run: npm test
+      - name: Synthetic detection regression
+        run: npm run eval:detection
