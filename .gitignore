@@ -3,4 +3,5 @@ dist/
 .env
 *.log
 .local-release-drill-*/
+.local-staging-drill-*/
 .DS_Store

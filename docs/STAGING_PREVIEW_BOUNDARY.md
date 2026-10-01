@@ -2,6 +2,8 @@
 
 This branch prepares a private, synthetic-only preview drill. It has not been deployed. Commit `40ddbf5ddf9a71162b31102890f6c6a37142c534` is the safe-deny source: it returns minimal `/health` metadata and has no decision-capable route, body parser, provider adapter, or audit writer. The later candidate adds only a fixture-ID route. A source commit alone is not hosted rollback proof.
 
+For a reproducible **local handler/source-switch simulation**, run `node scripts/drill-staging-source-restore.cjs 40ddbf5ddf9a71162b31102890f6c6a37142c534` from the repository root after committing the candidate. The script archives and compiles that exact safe-deny commit, uses an ephemeral in-memory RSA signer, then checks baseline → candidate → baseline with the candidate opt-in and public JWKS still set. It validates archive paths and deletes only its verified repository-local temporary directory. Its `simulationOnly: true` and `hostedDeploymentOrRollback: false` result does not verify a process restart, Vercel routing, Deployment Protection, branch alias restoration, or revocation of an immutable candidate URL.
+
 ## Application guard
 
 Staging requires `NODE_ENV=production`, `VERCEL=1`, `VERCEL_ENV=preview`, `VERCEL_TARGET_ENV=preview`, and explicit `GATEWAY_STAGING_PREVIEW=1`. Both `VERCEL_URL` and `VERCEL_BRANCH_URL` must be generated `.vercel.app` hostnames and differ from `VERCEL_PROJECT_PRODUCTION_URL`. Only requests whose Host exactly matches one of those two generated hosts pass. Other aliases, a port suffix, and a production environment fail closed. Local demo and loopback private-pilot opt-ins cannot be combined with staging.
