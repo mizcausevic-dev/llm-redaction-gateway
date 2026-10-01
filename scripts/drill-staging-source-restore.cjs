@@ -108,7 +108,7 @@ async function assertSafeDeny(entrypoint, label) {
       status: 'ok', mode: 'staging-preview', decisionRoute: 'disabled',
     }, `${label} safe-deny state`);
     const decision = await withTransportRetry(() => request(app).post('/api/staging/decide')
-      .set('X-Drill-Host', host).send({ fixtureId: 'obfuscated-email' }));
+      .set('X-Drill-Host', host));
     assert.equal(decision.status, 404, `${label} fixture route absent`);
     assert.deepEqual(decision.body, { error: 'Not found' }, `${label} fixture route response`);
     const legacy = await withTransportRetry(() => request(app).post('/api/gateway/process')
@@ -134,7 +134,7 @@ async function assertCandidate(entrypoint, signer) {
   assert.equal(health.status, 200, 'candidate health');
   assert.equal(health.body.decisionRoute, 'fixture-only', 'candidate route enabled');
   const unauthenticated = await withTransportRetry(() => request(app).post('/api/staging/decide')
-    .set('X-Drill-Host', generatedHost).send({ fixtureId: 'obfuscated-email' }));
+    .set('X-Drill-Host', generatedHost));
   assert.equal(unauthenticated.status, 401, 'candidate rejects missing token');
   const decision = await withTransportRetry(() => request(app).post('/api/staging/decide')
     .set('X-Drill-Host', branchHost).set('Authorization', `Bearer ${token}`)
