@@ -57,7 +57,7 @@ async function getJson(url, options) {
 async function start(directory, port) {
   const child = spawn(process.execPath, [path.join(directory, 'dist', 'index.js')], {
     cwd: directory,
-    env: { ...process.env, NODE_ENV: 'staging', PORT: String(port), NODE_PATH: nodeModules },
+    env: { ...process.env, NODE_ENV: 'development', GATEWAY_LOCAL_DEMO: '1', PORT: String(port), NODE_PATH: nodeModules },
     stdio: 'ignore',
   });
   active = child;

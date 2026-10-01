@@ -1,13 +1,15 @@
 import dotenv from 'dotenv';
+import { assertLocalDemoRuntime } from './runtime-boundary';
 dotenv.config();
 
+const rawPort = process.env.PORT ?? '3000';
+if (!/^[1-9]\d{0,4}$/.test(rawPort) || Number(rawPort) > 65535) {
+  throw new Error('PORT must be an integer between 1 and 65535.');
+}
+
 export const env = {
-  port: parseInt(process.env.PORT || '3000', 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
+  port: Number(rawPort),
+  nodeEnv: process.env.NODE_ENV ?? '',
 };
 
-// This repository ships a local policy-decision prototype, not an authenticated
-// multi-tenant egress proxy. Refuse accidental production service startup.
-if (env.nodeEnv === 'production') {
-  throw new Error('Production API startup is disabled: authentication, tenant binding, and provider egress are not implemented.');
-}
+assertLocalDemoRuntime(env.nodeEnv, process.env.GATEWAY_LOCAL_DEMO);

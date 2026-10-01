@@ -165,8 +165,10 @@ This browser capture is from the locally running `/api/dashboard/summary` endpoi
 git clone https://github.com/mizcausevic-dev/llm-redaction-gateway.git
 cd llm-redaction-gateway
 npm ci
-npm run dev
+NODE_ENV=development GATEWAY_LOCAL_DEMO=1 npm run dev
 ```
+
+In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled API also requires both values; missing mode or opt-in, production mode, and invalid ports refuse startup.
 
 Visit:
 
@@ -192,7 +194,9 @@ The report distinguishes supported fixture regressions from challenge cases. On 
 
 For a disposable local process-switch and rollback drill after committing a candidate, run `node scripts/drill-local-rollback.js <prior-commit-sha>`. The script compiles both commits, checks `/health` and synthetic decisions on the same loopback port, then restores the prior commit's process. It does not exercise a hosting platform, external provider, real tenant, or production rollback.
 
-The API binds to loopback, accepts only local Host headers, and marks responses `Cache-Control: no-store`. Those controls reduce accidental local exposure; they do not authenticate a caller or a tenant. A detected match is removed from the public preview, but unmatched sensitive text can still be returned unchanged. Do not submit real sensitive data.
+The API binds to loopback, accepts only local Host headers, rejects common proxy-forwarding headers, and marks responses `Cache-Control: no-store`. Do not expose it through a reverse proxy; one that strips forwarding headers can defeat that request check. These controls reduce accidental local exposure but do not authenticate a caller or a tenant. A detected match is removed from the public preview, but unmatched sensitive text can still be returned unchanged. Do not submit real sensitive data.
+
+The Host check runs before access logging and JSON parsing. A rejected streaming upload may surface as a connection reset instead of a complete HTTP 403 response when the server closes the request early; the request does not reach a decision route.
 
 ## What This Demonstrates
 
