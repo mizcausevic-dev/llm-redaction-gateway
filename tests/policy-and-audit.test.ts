@@ -19,7 +19,7 @@ test('evaluatePolicy: SSN → redact (default)', () => {
 });
 
 test('evaluatePolicy: credit card hard-blocks regardless of policy', () => {
-  const r = redactText('Card 4532-1234-5678-9010');
+  const r = redactText('Card 4532-1234-5678-9014');
   // Try to override credit-card to allow — gateway should still block
   const tenantPolicy: TenantPolicy = {
     tenantId: 'rogue',

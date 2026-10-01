@@ -18,7 +18,7 @@ const supported: Probe[] = [
   { id: 'ssn-dot', text: 'SSN 123.45.6789', expectedPattern: 'ssn-us', expectedDecision: 'redact' },
   { id: 'phone-parentheses', text: 'Call (212) 555-0123', expectedPattern: 'us-phone', expectedDecision: 'redact' },
   { id: 'email-plus', text: 'Email user+tag@example.com', expectedPattern: 'email', expectedDecision: 'redact' },
-  { id: 'credit-card', text: 'Card 4532 1234 5678 9010', expectedPattern: 'credit-card', expectedDecision: 'block' },
+  { id: 'credit-card', text: 'Card 4532 1234 5678 9014', expectedPattern: 'credit-card', expectedDecision: 'block' },
   { id: 'aws-access-id', text: 'Use AKIA' + 'A'.repeat(16), expectedPattern: 'aws-access-key', expectedDecision: 'block' },
   { id: 'generic-api-key-spaced', text: 'api key: abcdefghijklmnopqrstuvwxyz123456', expectedPattern: 'generic-api-key', expectedDecision: 'block' },
   { id: 'github-pat', text: 'ghp_' + 'A'.repeat(36), expectedPattern: 'github-pat', expectedDecision: 'block' },

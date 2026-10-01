@@ -60,9 +60,15 @@ test('redactText: GitHub PAT detected', () => {
 });
 
 test('redactText: credit card detected and redacted', () => {
-  const r = redactText('Card 4532-1234-5678-9010 expired');
+  const r = redactText('Card 4532-1234-5678-9014 expired');
   assert.ok(r.hits.some((h) => h.patternName === 'credit-card'));
   assert.match(r.redacted, /\[CC_1\]/);
+});
+
+test('redactText: card-shaped ticket failing checksum is not hard-blocked', () => {
+  const r = redactText('Ticket 1234-5678-9012-3456');
+  assert.equal(r.hits.some((h) => h.patternName === 'credit-card'), false);
+  assert.equal(r.redacted, r.original);
 });
 
 test('redactText: classified marker detected', () => {

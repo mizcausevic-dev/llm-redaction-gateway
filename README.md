@@ -49,7 +49,7 @@ These adjacent prototypes model detection and decision logic. A production DLP b
 |---|---|
 | `credential` | Private keys, AWS access/secret keys, GitHub PATs, Slack tokens, OpenAI keys, Anthropic keys, JWTs, generic API keys, password assignments |
 | `pii` | US SSN, IBAN, phone, email, DOB markers, IPv4 |
-| `pci` | Credit card numbers, CVV/CVC markers |
+| `pci` | Luhn-valid 16-digit card shapes, CVV/CVC markers |
 | `health` | Medical record numbers (MRN) |
 | `internal-marker` | CONFIDENTIAL/SECRET/RESTRICTED, M&A codenames |
 | `source-code` | AWS SDK creds in code, database connection strings with passwords |
@@ -118,7 +118,7 @@ The audit endpoints summarize a bundled **synthetic fixture**. Runtime decisions
 ```json
 POST /api/gateway/process
 {
-  "prompt": "Please email confirmation to alice@corp.com. Customer SSN: 123-45-6789. Card ending 4532-1234-5678-9010.",
+  "prompt": "Please email confirmation to alice@corp.com. Customer SSN: 123-45-6789. Card ending 4532-1234-5678-9014.",
   "tenantId": "tenant_default"
 }
 ```
@@ -188,7 +188,9 @@ Run the curated synthetic detector probes separately:
 npm run eval:detection
 ```
 
-The report distinguishes supported fixture regressions from challenge cases. On this candidate, the 14 supported cases match expectations; all four challenge cases expose a miss or false positive. See [detection evaluation](docs/DETECTION_EVAL.md) for the cases and limits. These counts are not real-world recall or precision.
+The report distinguishes supported fixture regressions from challenge cases. On this candidate, the 14 supported cases match expectations; one of four challenge cases matches expectations after filtering checksum-invalid card shapes. See [detection evaluation](docs/DETECTION_EVAL.md) for the cases and limits. These counts are not real-world recall or precision.
+
+For a disposable local process-switch and rollback drill after committing a candidate, run `node scripts/drill-local-rollback.js <prior-commit-sha>`. The script compiles both commits, checks `/health` and synthetic decisions on the same loopback port, then restores the prior commit's process. It does not exercise a hosting platform, external provider, real tenant, or production rollback.
 
 The API binds to loopback, accepts only local Host headers, and marks responses `Cache-Control: no-store`. Those controls reduce accidental local exposure; they do not authenticate a caller or a tenant. A detected match is removed from the public preview, but unmatched sensitive text can still be returned unchanged. Do not submit real sensitive data.
 

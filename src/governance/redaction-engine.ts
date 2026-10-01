@@ -86,6 +86,7 @@ export function redactText(input: string, options: RedactionOptions = {}): Redac
     const re = new RegExp(pattern.regex.source, flags);
     let m: RegExpExecArray | null;
     while ((m = re.exec(input)) !== null) {
+      if (pattern.validate && !pattern.validate(m[0])) continue;
       // For patterns with capture groups (api-key, password), match the full match;
       // the capture group is just for testing intent
       rawMatches.push({

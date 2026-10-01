@@ -17,6 +17,22 @@ test('gateway hard blocks a secret even when caller requests pattern exclusion',
   assert.equal(JSON.stringify(response.body).includes(secret), false);
 });
 
+test('gateway hard blocks a valid card shape but allows a checksum-invalid ticket', async () => {
+  const card = await request(app).post('/api/gateway/process').send({
+    prompt: 'Card 4532-1234-5678-9014',
+  });
+  assert.equal(card.status, 200);
+  assert.equal(card.body.decision, 'block');
+  assert.equal(card.body.redactedPrompt, '');
+
+  const ticket = await request(app).post('/api/gateway/process').send({
+    prompt: 'Ticket 1234-5678-9012-3456',
+  });
+  assert.equal(ticket.status, 200);
+  assert.equal(ticket.body.decision, 'allow');
+  assert.equal(ticket.body.hits.length, 0);
+});
+
 test('decision metadata never returns full matched values', async () => {
   const response = await request(app).post('/api/gateway/process').send({
     prompt: 'Please email alice@example.com',

@@ -23,6 +23,26 @@ export interface DetectionPattern {
   defaultPolicy: DefaultPolicy;
   // Token format used in redacted output (e.g., '[SSN_X]')
   tokenLabel: string;
+  validate?: (matchedValue: string) => boolean;
+}
+
+// A 16-digit shape alone also matches ticket and reference numbers. This
+// checksum is only a false-positive filter; it does not prove that a card is
+// active, owned by the caller, or safe to process.
+function passesLuhn(value: string): boolean {
+  const digits = value.replace(/[ -]/g, '');
+  let sum = 0;
+  let double = false;
+  for (let index = digits.length - 1; index >= 0; index--) {
+    let digit = Number(digits[index]);
+    if (double) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    double = !double;
+  }
+  return sum % 10 === 0;
 }
 
 export const PATTERN_CATALOG: DetectionPattern[] = [
@@ -48,7 +68,7 @@ export const PATTERN_CATALOG: DetectionPattern[] = [
   { name: 'ipv4', category: 'pii', severity: 'low', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, description: 'IPv4 address.', defaultPolicy: 'warn', tokenLabel: 'IPV4' },
 
   // Payment / financial
-  { name: 'credit-card', category: 'pci', severity: 'critical', regex: /\b(?:\d{4}[- ]?){3}\d{4}\b/g, description: 'Credit card number.', defaultPolicy: 'block', tokenLabel: 'CC' },
+  { name: 'credit-card', category: 'pci', severity: 'critical', regex: /\b(?:\d{4}[- ]?){3}\d{4}\b/g, description: 'Luhn-valid 16-digit card number.', defaultPolicy: 'block', tokenLabel: 'CC', validate: passesLuhn },
   { name: 'cvv', category: 'pci', severity: 'high', regex: /\b(?:CVV|CVC|CVV2)[:\s]+\d{3,4}\b/gi, description: 'CVV/CVC marker.', defaultPolicy: 'block', tokenLabel: 'CVV' },
 
   // Health
