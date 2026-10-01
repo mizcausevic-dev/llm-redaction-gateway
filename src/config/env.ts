@@ -25,6 +25,7 @@ export interface StagingDecisionConfig {
 export type RuntimeEnv =
   | { mode: 'local-demo'; port: number; nodeEnv: 'development' | 'test' }
   | { mode: 'private-pilot'; port: number; nodeEnv: 'development'; auth: PilotAuthConfig }
+  | { mode: 'production-bootstrap'; port: number; nodeEnv: 'production'; allowedHosts: readonly string[] }
   | { mode: 'staging-preview'; port: number; nodeEnv: 'production'; allowedHosts: readonly string[]; decision: StagingDecisionConfig | null };
 
 const VERCEL_HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app$/;
@@ -65,6 +66,23 @@ function readVercelHost(value: string | undefined, name: string): string {
     throw new Error(`${name} must be one generated .vercel.app hostname.`);
   }
   return value;
+}
+
+function readProductionBootstrap(source: NodeJS.ProcessEnv, port: number): RuntimeEnv {
+  if (source.NODE_ENV !== 'production'
+    || source.VERCEL !== '1'
+    || source.VERCEL_ENV !== 'production'
+    || source.VERCEL_TARGET_ENV !== 'production'
+    || source.GATEWAY_PRODUCTION_BOOTSTRAP !== '1'
+    || Object.keys(source).some((key) => key.startsWith('GATEWAY_')
+      && key !== 'GATEWAY_PRODUCTION_BOOTSTRAP')) {
+    throw new Error('Production bootstrap requires exact Vercel production markers and its own safe-deny opt-in.');
+  }
+  const deploymentHost = readVercelHost(source.VERCEL_URL, 'VERCEL_URL');
+  // Require the default Vercel production domain, not an attached custom
+  // domain. Only the exact deployment Host is served by this app.
+  readVercelHost(source.VERCEL_PROJECT_PRODUCTION_URL, 'VERCEL_PROJECT_PRODUCTION_URL');
+  return { mode: 'production-bootstrap', port, nodeEnv: 'production', allowedHosts: [deploymentHost] };
 }
 
 function readStagingPreview(source: NodeJS.ProcessEnv, port: number): RuntimeEnv {
@@ -146,6 +164,9 @@ export function parseRuntimeEnv(source: NodeJS.ProcessEnv): RuntimeEnv {
   }
   const port = Number(rawPort);
 
+  if (source.GATEWAY_PRODUCTION_BOOTSTRAP !== undefined) {
+    return readProductionBootstrap(source, port);
+  }
   if (source.VERCEL !== undefined || source.VERCEL_ENV !== undefined
     || source.VERCEL_TARGET_ENV !== undefined || source.GATEWAY_STAGING_PREVIEW !== undefined) {
     return readStagingPreview(source, port);

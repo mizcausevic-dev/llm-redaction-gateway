@@ -28,14 +28,15 @@ export function createApp(
   app.disable('x-powered-by');
   // NODE_ENV remains development for the local pilot, but error responses
   // must not reveal implementation details if a handler throws.
-  if (runtime.mode === 'private-pilot' || runtime.mode === 'staging-preview') app.set('env', 'production');
+  if (runtime.mode === 'private-pilot' || runtime.mode === 'staging-preview'
+    || runtime.mode === 'production-bootstrap') app.set('env', 'production');
   app.use(helmet());
   app.use((req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
-    if (runtime.mode === 'staging-preview') {
+    if (runtime.mode === 'staging-preview' || runtime.mode === 'production-bootstrap') {
       res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
-      // Accept only Vercel-generated preview and branch hosts, never a custom
-      // or production alias. The platform must separately protect both URLs.
+      // Only exact Vercel-generated hosts listed by the selected mode are
+      // accepted. Forwarding headers are never trusted for this decision.
       if (!runtime.allowedHosts.includes(req.headers.host ?? '')) {
         res.status(403).json({ error: 'Forbidden' });
         return;
@@ -51,6 +52,13 @@ export function createApp(
     }
     next();
   });
+  if (runtime.mode === 'production-bootstrap') {
+    app.get('/health', (_req, res) => res.json({
+      status: 'ok', mode: 'production-bootstrap', decisionRoute: 'disabled',
+    }));
+    app.use((_req, res) => { res.status(404).json({ error: 'Not found' }); });
+    return app;
+  }
   if (runtime.mode === 'staging-preview') {
     app.get('/health', (_req, res) => res.json({
       status: 'ok', mode: 'staging-preview', decisionRoute: runtime.decision ? 'fixture-only' : 'disabled',

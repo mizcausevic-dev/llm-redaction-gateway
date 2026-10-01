@@ -1,8 +1,14 @@
-# Synthetic Vercel preview boundary
+# Synthetic Vercel bootstrap and preview boundary
 
 This branch prepares a private, synthetic-only preview drill. It has not been deployed. Commit `40ddbf5ddf9a71162b31102890f6c6a37142c534` is the safe-deny source: it returns minimal `/health` metadata and has no decision-capable route, body parser, provider adapter, or audit writer. The later candidate adds only a fixture-ID route. A source commit alone is not hosted rollback proof.
 
 For a reproducible **local handler/source-switch simulation**, run `node scripts/drill-staging-source-restore.cjs 40ddbf5ddf9a71162b31102890f6c6a37142c534` from the repository root after committing the candidate. The script archives and compiles that exact safe-deny commit, uses an ephemeral in-memory RSA signer, then checks baseline → candidate → baseline with the candidate opt-in and public JWKS still set. It validates archive paths and deletes only its verified repository-local temporary directory. Its `simulationOnly: true` and `hostedDeploymentOrRollback: false` result does not verify a process restart, Vercel routing, Deployment Protection, branch alias restoration, or revocation of an immutable candidate URL.
+
+## Production safe-deny bootstrap
+
+Vercel makes a new project's first deployment **Production**, even from a nonproduction branch. The separate bootstrap source accepts only `NODE_ENV=production`, `VERCEL=1`, `VERCEL_ENV=production`, `VERCEL_TARGET_ENV=production`, and exact `GATEWAY_PRODUCTION_BOOTSTRAP=1`. Any other `GATEWAY_*` variable, including preview decisions, private-pilot authentication, or local-demo flags, refuses startup. `VERCEL_URL` and `VERCEL_PROJECT_PRODUCTION_URL` must be single `.vercel.app` hosts. Only the exact `VERCEL_URL` Host is allowed; a distinct production alias, branch URL, port suffix, or custom Host receives 403. If Vercel sets the generated and project production URLs to the same host, that one host can serve the minimal health response. Forwarding headers are never treated as Host authority.
+
+The bootstrap returns only `{ "status": "ok", "mode": "production-bootstrap", "decisionRoute": "disabled" }` from `/health`; every other route returns 404. It mounts no body parser, caller authentication, decision route, provider adapter, audit writer, or access log middleware. All app responses have `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow, noarchive`. These checks are **not caller authentication**. Configure and verify Vercel Authentication for **All Deployments** before any first upload, with no shareable link, exception, or bypass token. Do not attach a custom domain. Scope `GATEWAY_PRODUCTION_BOOTSTRAP=1` to Production only and remove it before any real Production service design; scope preview opt-ins to only the intended preview branch. No protected project configuration or hosted bootstrap behavior has been verified, and this code-only branch does not authorize an upload.
 
 ## Application guard
 
@@ -22,11 +28,11 @@ Even a successful hosted synthetic drill would prove only access control, fixtur
 
 ## Before a hosted drill
 
-**The hosted drill is currently blocked.** Vercel states that the first deployment of a new project is always a production deployment, even when invoked from a nonproduction branch or without `--prod`. This code intentionally refuses production startup. Do not create a new Vercel project expecting a preview-first upload. A pre-existing protected project, or a separately reviewed and approved production bootstrap path, is required before any deployment.
+**The hosted drill is currently blocked.** Vercel states that the first deployment of a new project is always a production deployment, even when invoked from a nonproduction branch or without `--prod`. The code now has a separate safe-deny Production bootstrap for that case, but no protected target, first-upload sequence, or live behavior has been verified. Do not create a new project expecting a preview-first upload. A verified protected project and a separately reviewed first Production artifact are required before any hosted drill.
 
-Once a suitable existing private target is identified:
+Once a suitable protected target is identified:
 
-1. Verify the project's Deployment Protection and existing artifact state before connecting this repository. No project or credential is created by this branch.
+1. Verify the project's Deployment Protection and existing artifact state before connecting this repository. For a new project, plan the first artifact as Production safe-deny bootstrap and verify All Deployments protection before its upload. No project or credential is created by this branch.
 2. Enable system environment variables and restrict preview access using Vercel Authentication for **All Deployments**. Scope the staging opt-ins and public JWKS to only the intended preview branch. Verify unauthenticated denial at the generated and branch URLs, and verify the production URL cannot reach the staging app. Confirm no shareable link, exception, or bypass header grants unintended access.
 3. Deploy the safe-deny commit as a preview, record its immutable deployment URL and ID, and check `/health` plus a denied decision route at the protected boundary.
 4. Only then test the later synthetic candidate with a separate fixture-only token. Restore by building and deploying the exact safe-deny source as a **new preview artifact** on the same staging branch. Confirm that the branch URL now resolves to that new artifact, then recheck access denial, health, and the absent decision route. If the branch alias does not advance to the restored artifact, the drill is blocked. Do not use production Instant Rollback as a proxy for preview restoration.

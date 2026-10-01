@@ -168,11 +168,11 @@ npm ci
 NODE_ENV=development GATEWAY_LOCAL_DEMO=1 npm run dev
 ```
 
-In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled local demo also requires both values; missing mode or opt-in, production mode without the separate exact preview markers, and invalid ports refuse startup.
+In PowerShell, set `$env:NODE_ENV = 'development'` and `$env:GATEWAY_LOCAL_DEMO = '1'` before `npm.cmd run dev`. The compiled local demo also requires both values; missing mode or opt-in, production mode without a separate exact Vercel bootstrap or preview gate, and invalid ports refuse startup.
 
-### Synthetic preview preparation
+### Synthetic Vercel boundary preparation
 
-This branch also contains a separate, disabled-by-default Vercel preview adapter. Its first commit is deliberately safe-deny and responds only to `/health`. A later commit can evaluate four built-in synthetic fixtures only after a second opt-in and a signed fixture-only token; callers cannot submit prompt text. Neither artifact is deployed. The required platform protection, token contract, and limited restoration procedure are in [the staging-preview boundary](docs/STAGING_PREVIEW_BOUNDARY.md). The local demo and loopback private pilot remain separate.
+This branch also contains separate, disabled-by-default Vercel safe-deny Production bootstrap and preview adapters. The Production bootstrap answers only `/health` on its exact generated deployment Host. The preview's first commit is also safe-deny; a later commit can evaluate four built-in synthetic fixtures only after a second opt-in and a signed fixture-only token. Callers cannot submit prompt text. None of these artifacts is deployed. The required platform protection, token contract, and limited restoration procedure are in [the Vercel boundary](docs/STAGING_PREVIEW_BOUNDARY.md). The local demo and loopback private pilot remain separate.
 
 ### Authenticated private-pilot rehearsal
 
