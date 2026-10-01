@@ -101,7 +101,13 @@ async function main() {
 
   drillDir = mkdtempSync(path.join(root, '.local-release-drill-'));
   const baseline = path.join(drillDir, 'baseline');
-  run('git', ['-c', `safe.directory=${root.replace(/\\/g, '/')}`, 'clone', '--quiet', '--no-hardlinks', root, baseline]);
+  // Local clone also opens the source .git directory, which can have a
+  // different owner in sandboxed Windows runs. Trust only these two paths.
+  run('git', [
+    '-c', `safe.directory=${root.replace(/\\/g, '/')}`,
+    '-c', `safe.directory=${path.join(root, '.git').replace(/\\/g, '/')}`,
+    'clone', '--quiet', '--no-hardlinks', root, baseline,
+  ]);
   run('git', ['-c', `safe.directory=${baseline.replace(/\\/g, '/')}`, 'checkout', '--quiet', '--detach', baselineOid], baseline);
   run(process.execPath, [tsc, '-p', path.join(baseline, 'tsconfig.json')]);
   run(process.execPath, [tsc, '-p', path.join(root, 'tsconfig.json')]);
