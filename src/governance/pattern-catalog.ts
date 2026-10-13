@@ -1,7 +1,6 @@
 // Detection pattern catalog. Each pattern carries a category, severity,
-// and policy default (block / redact / warn). The catalog is deliberately
-// expanded vs shadow-ai-detector because this gateway is the LAST line of
-// defense before egress — false negatives here mean leaked secrets.
+// and policy default (block / redact / warn). This remains a local decision
+// prototype, not an enforcing egress boundary; misses are expected.
 
 export type Category =
   | 'credential'
@@ -24,6 +23,38 @@ export interface DetectionPattern {
   defaultPolicy: DefaultPolicy;
   // Token format used in redacted output (e.g., '[SSN_X]')
   tokenLabel: string;
+  validate?: (matchedValue: string) => boolean;
+}
+
+// A 16-digit shape alone also matches ticket and reference numbers. This
+// checksum is only a false-positive filter; it does not prove that a card is
+// active, owned by the caller, or safe to process.
+function passesLuhn(value: string): boolean {
+  const digits = value.replace(/[ -]/g, '');
+  let sum = 0;
+  let double = false;
+  for (let index = digits.length - 1; index >= 0; index--) {
+    let digit = Number(digits[index]);
+    if (double) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    double = !double;
+  }
+  return sum % 10 === 0;
+}
+
+function hasBoundedEmailDomain(value: string): boolean {
+  // The literal [at]/[dot] branch has its own bounded grammar. For ordinary
+  // addresses, keep the whole domain within 253 characters without limiting
+  // subdomain count, then validate DNS label lengths.
+  const at = value.indexOf('@');
+  if (at < 0) return true;
+  const labels = value.slice(at + 1).split('.');
+  return labels.length >= 2
+    && labels.every((label) => label.length >= 1 && label.length <= 63)
+    && /^[A-Za-z]{2,63}$/.test(labels[labels.length - 1]);
 }
 
 export const PATTERN_CATALOG: DetectionPattern[] = [
@@ -37,19 +68,25 @@ export const PATTERN_CATALOG: DetectionPattern[] = [
   { name: 'openai-key', category: 'credential', severity: 'critical', regex: /\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{30,}\b/g, description: 'OpenAI-style secret key.', defaultPolicy: 'block', tokenLabel: 'OPENAI_KEY' },
   { name: 'anthropic-key', category: 'credential', severity: 'critical', regex: /\bsk-ant-[A-Za-z0-9_-]{40,}\b/g, description: 'Anthropic API key.', defaultPolicy: 'block', tokenLabel: 'ANTHROPIC_KEY' },
   { name: 'jwt-token', category: 'credential', severity: 'high', regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, description: 'JWT token.', defaultPolicy: 'redact', tokenLabel: 'JWT' },
-  { name: 'generic-api-key', category: 'credential', severity: 'high', regex: /\b(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?token)\s*[:=]\s*["']?([A-Za-z0-9_-]{20,})["']?/gi, description: 'Generic API/secret key assignment.', defaultPolicy: 'block', tokenLabel: 'API_KEY' },
+  { name: 'generic-api-key', category: 'credential', severity: 'high', regex: /\b(?:api[ _-]?key|secret[ _-]?key|access[ _-]?token)\s*[:=]\s*["']?([A-Za-z0-9_-]{20,})["']?/gi, description: 'Generic API/secret key assignment.', defaultPolicy: 'block', tokenLabel: 'API_KEY' },
   { name: 'password-assign', category: 'credential', severity: 'high', regex: /\b(?:password|passwd|pwd)\s*[:=]\s*["']([^"'\s]{6,})["']/gi, description: 'Password assignment.', defaultPolicy: 'redact', tokenLabel: 'PASSWORD' },
 
   // PII
-  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b\d{3}-\d{2}-\d{4}\b/g, description: 'US SSN.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
+  // Unseparated nine-digit values are too ambiguous to flag by shape alone.
+  // Require an explicit SSN label for that variant.
+  { name: 'ssn-us', category: 'pii', severity: 'high', regex: /\b(?:\d{3}[- .]\d{2}[- .]\d{4}|(?:SSN|Social[ \t]{1,3}Security[ \t]{1,3}(?:Number|No\.?))(?:[ \t]{1,3}|[ \t]{0,3}[:#][ \t]{0,3})\d{9})\b/gi, description: 'US SSN with separators or labeled nine-digit value.', defaultPolicy: 'redact', tokenLabel: 'SSN' },
   { name: 'iban', category: 'pii', severity: 'high', regex: /\b[A-Z]{2}\d{2}[A-Z0-9]{12,28}\b/g, description: 'IBAN.', defaultPolicy: 'redact', tokenLabel: 'IBAN' },
-  { name: 'us-phone', category: 'pii', severity: 'low', regex: /\b(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b/g, description: 'US phone number.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
-  { name: 'email', category: 'pii', severity: 'low', regex: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, description: 'Email address.', defaultPolicy: 'redact', tokenLabel: 'EMAIL' },
+  // Space-separated ten-digit values also require a phone/call label so
+  // arbitrary reference numbers do not become phone matches.
+  { name: 'us-phone', category: 'pii', severity: 'low', regex: /(?<![A-Za-z0-9])(?:\(\d{3}\)\s*|\d{3}[-.])\d{3}[-.]\d{4}\b|\b(?:call|phone|tel|mobile)\b(?:[ \t]{1,3}|[ \t]{0,3}:[ \t]{1,3})\d{3}[ \t]{1,3}\d{3}[ \t]{1,3}\d{4}\b/gi, description: 'US phone number, including labeled space-separated form.', defaultPolicy: 'redact', tokenLabel: 'PHONE' },
+  // The length caps and left boundary also prevent repeated partial attempts
+  // inside an overlong local part or domain. Bracket spellings stay narrow.
+  { name: 'email', category: 'pii', severity: 'low', regex: /(?<![\w.+-])(?:[\w.+-]{1,64}@[\w-](?:[\w.-]{0,251}[\w-])?|[\w.+-]{1,64}[ \t]{0,3}\[[ \t]{0,3}at[ \t]{0,3}\][ \t]{0,3}[\w-]{1,63}[ \t]{0,3}\[[ \t]{0,3}dot[ \t]{0,3}\][ \t]{0,3}[A-Za-z]{2,63})(?![\w-]|\.[\w-])/gi, description: 'Email address, including literal [at]/[dot] spelling.', defaultPolicy: 'redact', tokenLabel: 'EMAIL', validate: hasBoundedEmailDomain },
   { name: 'date-of-birth', category: 'pii', severity: 'medium', regex: /\b(?:DOB|date of birth|d\.o\.b\.)[:\s]+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/gi, description: 'Date of birth marker.', defaultPolicy: 'redact', tokenLabel: 'DOB' },
   { name: 'ipv4', category: 'pii', severity: 'low', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, description: 'IPv4 address.', defaultPolicy: 'warn', tokenLabel: 'IPV4' },
 
   // Payment / financial
-  { name: 'credit-card', category: 'pci', severity: 'critical', regex: /\b(?:\d{4}[- ]?){3}\d{4}\b/g, description: 'Credit card number.', defaultPolicy: 'block', tokenLabel: 'CC' },
+  { name: 'credit-card', category: 'pci', severity: 'critical', regex: /\b(?:\d{4}[- ]?){3}\d{4}\b/g, description: 'Luhn-valid 16-digit card number.', defaultPolicy: 'block', tokenLabel: 'CC', validate: passesLuhn },
   { name: 'cvv', category: 'pci', severity: 'high', regex: /\b(?:CVV|CVC|CVV2)[:\s]+\d{3,4}\b/gi, description: 'CVV/CVC marker.', defaultPolicy: 'block', tokenLabel: 'CVV' },
 
   // Health
