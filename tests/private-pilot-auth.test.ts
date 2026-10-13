@@ -24,6 +24,7 @@ let localKeyResolver: ReturnType<typeof createLocalJWKSet>;
 let server: Server;
 let privateKey: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 let otherPrivateKey: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
+const defaultAgent = new Agent({ keepAlive: true, maxSockets: 1 });
 
 type TokenOptions = {
   issuer?: string;
@@ -68,6 +69,7 @@ before(async () => {
 });
 
 after(async () => {
+  defaultAgent.destroy();
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });
 
@@ -226,10 +228,10 @@ async function rawPilotRequestOnce(
       port: address.port,
       method,
       path,
-      agent,
+      agent: agent ?? defaultAgent,
       headers: {
         Host: `localhost:${address.port}`,
-        Connection: agent ? 'keep-alive' : 'close',
+        Connection: 'keep-alive',
         'Content-Length': Buffer.byteLength(serialized),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(authorization === undefined ? {} : { Authorization: authorization }),
