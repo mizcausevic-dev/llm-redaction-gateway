@@ -1,4 +1,6 @@
-import { request as httpRequest, type IncomingHttpHeaders, type Server } from 'node:http';
+import { Agent, request as httpRequest, type IncomingHttpHeaders, type Server } from 'node:http';
+
+const localAgent = new Agent({ keepAlive: true, maxSockets: 1 });
 
 export interface LocalResponse {
   status: number;
@@ -43,9 +45,10 @@ function requestOnce(
       port: address.port,
       method,
       path,
+      agent: localAgent,
       headers: {
         Host: `localhost:${address.port}`,
-        Connection: 'close',
+        Connection: 'keep-alive',
         'Content-Length': Buffer.byteLength(serialized),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...headers,
