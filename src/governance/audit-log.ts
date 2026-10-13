@@ -1,6 +1,5 @@
-// Gateway decision audit log + telemetry rollup. Every decision (allow,
-// redact, block) gets recorded with caller, target, hit categories, and
-// final policy decision. The rollup summary is the CISO-facing dashboard.
+// Aggregate the bundled synthetic audit fixture. Runtime decisions are not
+// persisted or added to this collection.
 
 import type { GatewayDecision } from './policy-engine';
 import type { Category, Severity } from './pattern-catalog';
